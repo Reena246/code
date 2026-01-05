@@ -1,295 +1,163 @@
-package com.example.accesscontrol.dto;
+1//
 
-import java.time.LocalDateTime;
+package com.example.accesscontrol;
 
-public class DoorEventResponse {
-    private String message;
-    private LocalDateTime eventTime;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
 
-    public DoorEventResponse(String message, LocalDateTime eventTime) {
-        this.message = message;
-        this.eventTime = eventTime;
+@SpringBootApplication
+public class AccesscontrolApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(AccesscontrolApplication.class, args);
     }
-
-    // getters
-    public String getMessage() { return message; }
-    public LocalDateTime getEventTime() { return eventTime; }
 }
 
+    
+2//
 
-9//
 
-  package com.example.accesscontrol.entity;
 
-import jakarta.persistence.*;
-import java.time.LocalDateTime;
+    package com.example.accesscontrol.config;
 
-@Entity
-@Table(name="access_log")
-public class AccessLog {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.TaskScheduler;
+import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.scheduling.concurrent.ConcurrentTaskScheduler;
 
-    private String cardId;
-    private String doorId;
-    private String locationId;
-
-    private LocalDateTime requestReceivedAt;
-    private LocalDateTime validationCompletedAt;
-    private LocalDateTime responseSentAt;
-
-    private Boolean accessGranted;
-
-    // getters & setters
+@Configuration
+@EnableScheduling
+public class SchedulerConfig {
+    @Bean
+    public TaskScheduler taskScheduler() {
+        return new ConcurrentTaskScheduler();
+    }
 }
 
+3//
 
-10//
-
-  package com.example.accesscontrol.entity;
-
-import jakarta.persistence.*;
-import java.time.LocalDateTime;
-
-@Entity
-@Table(name="door_event_log")
-public class DoorEventLog {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-
-    private String cardId;
-    private String doorId;
-    private String locationId;
-
-    private String eventType;
-    private String status;
-    private LocalDateTime eventTime;
-
-    // getters & setters
-}
-
-
-11//
-
-  package com.example.accesscontrol.entity;
-
-import jakarta.persistence.*;
-
-@Entity
-@Table(name="card_access")
-public class CardAccess {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-
-    private String cardId;
-    private String doorId;
-    private Boolean isActive;
-
-    // getters & setters
-}
-
-
-12//
-
-  package com.example.accesscontrol.repository;
-
-import com.example.accesscontrol.entity.CardAccess;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
-
-@Repository
-public interface CardAccessRepository extends JpaRepository<CardAccess, Long> {
-    boolean existsByCardIdAndDoorIdAndIsActiveTrue(String cardId, String doorId);
-}
-
-
-
-13//
-
-  package com.example.accesscontrol.repository;
-
-import com.example.accesscontrol.entity.AccessLog;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
-
-@Repository
-public interface AccessLogRepository extends JpaRepository<AccessLog, Long> { }
-
-
-
-14//
-
-  package com.example.accesscontrol.repository;
-
-import com.example.accesscontrol.entity.DoorEventLog;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
-
-import java.util.Optional;
-
-@Repository
-public interface DoorEventLogRepository extends JpaRepository<DoorEventLog, Long> {
-    Optional<DoorEventLog> findTopByDoorIdAndStatusOrderByEventTimeDesc(String doorId, String status);
-}
-
-
-
-
-15//
-
-  package com.example.accesscontrol.service;
+    package com.example.accesscontrol.controller;
 
 import com.example.accesscontrol.dto.AccessRequest;
 import com.example.accesscontrol.dto.AccessResponse;
-import com.example.accesscontrol.entity.AccessLog;
-import com.example.accesscontrol.repository.AccessLogRepository;
-import com.example.accesscontrol.repository.CardAccessRepository;
+import com.example.accesscontrol.service.AccessService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDateTime;
-
-@Service
-public class AccessService {
-
-    @Autowired
-    private CardAccessRepository cardAccessRepository;
+@RestController
+@RequestMapping("/api/v1/access")
+public class AccessController {
 
     @Autowired
-    private AccessLogRepository accessLogRepository;
+    private AccessService service;
 
-    public AccessResponse validate(AccessRequest request) {
-
-        LocalDateTime start = LocalDateTime.now();
-
-        boolean access = cardAccessRepository
-                .existsByCardIdAndDoorIdAndIsActiveTrue(
-                        request.getCardId(),
-                        request.getDoorId());
-
-        AccessLog log = new AccessLog();
-        log.setCardId(request.getCardId());
-        log.setDoorId(request.getDoorId());
-        log.setLocationId(request.getLocationId());
-        log.setRequestReceivedAt(start);
-        log.setValidationCompletedAt(LocalDateTime.now());
-        log.setResponseSentAt(LocalDateTime.now());
-        log.setAccessGranted(access);
-
-        accessLogRepository.save(log);
-
-        return new AccessResponse(
-                access,
-                access ? "Access granted" : "Access denied",
-                start,
-                log.getResponseSentAt());
+    @PostMapping("/validate")
+    public ResponseEntity<AccessResponse> validate(@RequestBody AccessRequest request) {
+        return ResponseEntity.ok(service.validate(request));
     }
 }
 
+  
+4//
 
 
 
-16//
-
-
-  package com.example.accesscontrol.service;
+    package com.example.accesscontrol.controller;
 
 import com.example.accesscontrol.dto.DoorEventRequest;
 import com.example.accesscontrol.dto.DoorEventResponse;
-import com.example.accesscontrol.entity.DoorEventLog;
-import com.example.accesscontrol.repository.DoorEventLogRepository;
+import com.example.accesscontrol.service.DoorEventService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.scheduling.TaskScheduler;
-import org.springframework.stereotype.Service;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 
-import java.time.Instant;
-import java.time.LocalDateTime;
-
-@Service
-public class DoorEventService {
-
-    @Value("${door.open.timeout.seconds}")
-    private int timeoutSeconds;
+@RestController
+@RequestMapping("/api/v1/door")
+public class DoorEventController {
 
     @Autowired
-    private DoorEventLogRepository repo;
+    private DoorEventService service;
 
-    @Autowired
-    private TaskScheduler scheduler;
-
-    public DoorEventResponse open(DoorEventRequest req) {
-
-        LocalDateTime now = LocalDateTime.now();
-
-        DoorEventLog log = new DoorEventLog();
-        log.setCardId(req.getCardId());
-        log.setDoorId(req.getDoorId());
-        log.setLocationId(req.getLocationId());
-        log.setEventType("OPEN");
-        log.setStatus("OPENED");
-        log.setEventTime(now);
-
-        repo.save(log);
-
-        scheduler.schedule(
-                () -> timeout(log.getId()),
-                Instant.now().plusSeconds(timeoutSeconds));
-
-        return new DoorEventResponse("Door opened", now);
+    @PostMapping("/open")
+    public ResponseEntity<DoorEventResponse> open(@RequestBody DoorEventRequest req) {
+        return ResponseEntity.ok(service.open(req));
     }
 
-    public DoorEventResponse close(DoorEventRequest req) {
-
-        repo.findTopByDoorIdAndStatusOrderByEventTimeDesc(
-                req.getDoorId(), "OPENED")
-            .ifPresent(log -> {
-                log.setStatus("CLOSED");
-                log.setEventType("CLOSE");
-                log.setEventTime(LocalDateTime.now());
-                repo.save(log);
-            });
-
-        return new DoorEventResponse("Door closed", LocalDateTime.now());
-    }
-
-    private void timeout(Long id) {
-        repo.findById(id).ifPresent(log -> {
-            if ("OPENED".equals(log.getStatus())) {
-                log.setStatus("TIMED_OUT");
-                log.setEventType("TIMEOUT");
-                log.setEventTime(LocalDateTime.now());
-                repo.save(log);
-            }
-        });
+    @PostMapping("/close")
+    public ResponseEntity<DoorEventResponse> close(@RequestBody DoorEventRequest req) {
+        return ResponseEntity.ok(service.close(req));
     }
 }
 
 
+5//
+
+    package com.example.accesscontrol.dto;
+
+public class AccessRequest {
+    private String cardId;
+    private String doorId;
+    private String locationId;
+
+    // getters & setters
+    public String getCardId() { return cardId; }
+    public void setCardId(String cardId) { this.cardId = cardId; }
+
+    public String getDoorId() { return doorId; }
+    public void setDoorId(String doorId) { this.doorId = doorId; }
+
+    public String getLocationId() { return locationId; }
+    public void setLocationId(String locationId) { this.locationId = locationId; }
+}
 
 
+6//
 
+    package com.example.accesscontrol.dto;
 
-17//
+import java.time.Duration;
+import java.time.LocalDateTime;
 
+public class AccessResponse {
+    private boolean accessGranted;
+    private String message;
+    private LocalDateTime requestReceivedAt;
+    private LocalDateTime responseSentAt;
+    private long processingTimeMillis;
 
-  spring.datasource.url=jdbc:mysql://localhost:3306/access_control
-spring.datasource.username=root
-spring.datasource.password=YOUR_PASSWORD
+    public AccessResponse(boolean accessGranted, String message, LocalDateTime req, LocalDateTime res) {
+        this.accessGranted = accessGranted;
+        this.message = message;
+        this.requestReceivedAt = req;
+        this.responseSentAt = res;
+        this.processingTimeMillis = Duration.between(req, res).toMillis();
+    }
 
-spring.jpa.hibernate.ddl-auto=none
-spring.jpa.show-sql=true
-spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MySQL8Dialect
+    // getters
+    public boolean isAccessGranted() { return accessGranted; }
+    public String getMessage() { return message; }
+    public LocalDateTime getRequestReceivedAt() { return requestReceivedAt; }
+    public LocalDateTime getResponseSentAt() { return responseSentAt; }
+    public long getProcessingTimeMillis() { return processingTimeMillis; }
+}
 
-server.port=8080
+7//
 
-door.open.timeout.seconds=10
+    package com.example.accesscontrol.dto;
 
+public class DoorEventRequest {
+    private String cardId;
+    private String doorId;
+    private String locationId;
 
+    // getters & setters
+    public String getCardId() { return cardId; }
+    public void setCardId(String cardId) { this.cardId = cardId; }
 
+    public String getDoorId() { return doorId; }
+    public void setDoorId(String doorId) { this.doorId = doorId; }
 
-
-  
+    public String getLocationId() { return locationId; }
+    public void setLocationId(String locationId) { this.locationId = locationId; }
+}
