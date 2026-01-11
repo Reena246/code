@@ -1,4 +1,4 @@
-package com.badgemate.entity;
+package com.company.badgemate.entity;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
