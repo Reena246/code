@@ -1,4 +1,3 @@
-/////
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -13,7 +12,7 @@
         <relativePath/>
     </parent>
     
-    <groupId>com.badgemate</groupId>
+    <groupId>com.company.badgemate</groupId>
     <artifactId>badgemate-access-control</artifactId>
     <version>1.0.0</version>
     <name>BadgeMate Access Control System</name>
