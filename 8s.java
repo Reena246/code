@@ -8,25 +8,24 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "access_group")
+@Table(name = "access_group_door")
+@IdClass(AccessGroupDoorId.class)
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class AccessGroup {
+public class AccessGroupDoor {
     
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "access_group_id")
+    @Column(name = "access_group_id", nullable = false)
     private Long accessGroupId;
     
-    @Column(name = "company_id", nullable = false)
-    private Long companyId;
+    @Id
+    @Column(name = "door_id", nullable = false)
+    private Long doorId;
     
-    @Column(name = "group_name", length = 50, nullable = false)
-    private String groupName;
-    
-    @Column(name = "description", length = 120)
-    private String description;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "access_type", nullable = false)
+    private AccessType accessType;
     
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;
@@ -52,5 +51,9 @@ public class AccessGroup {
     @PreUpdate
     protected void onUpdate() {
         updated = LocalDateTime.now();
+    }
+    
+    public enum AccessType {
+        ALLOW, DENY
     }
 }
