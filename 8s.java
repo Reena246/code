@@ -8,34 +8,37 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "employee")
+@Table(name = "access_card")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class Employee {
+public class AccessCard {
     
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "employee_pk")
-    private Long employeePk;
-    
-    @Column(name = "employee_code", length = 20, nullable = false, unique = true)
-    private String employeeCode;
+    @Column(name = "card_id")
+    private Long cardId;
     
     @Column(name = "company_id", nullable = false)
     private Long companyId;
     
-    @Column(name = "full_name", length = 80, nullable = false)
-    private String fullName;
+    @Column(name = "provider_id", nullable = false)
+    private Long providerId;
     
-    @Column(name = "email", length = 120)
-    private String email;
+    @Column(name = "employee_pk", nullable = false)
+    private Long employeePk;
     
-    @Column(name = "job_title_id")
-    private Long jobTitleId;
+    @Column(name = "card_uid", length = 40, nullable = false)
+    private String cardUid;
     
-    @Column(name = "access_group_id")
-    private Long accessGroupId;
+    @Column(name = "card_number", length = 40)
+    private String cardNumber;
+    
+    @Column(name = "issued_at", nullable = false)
+    private LocalDateTime issuedAt;
+    
+    @Column(name = "expires_at")
+    private LocalDateTime expiresAt;
     
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;
@@ -56,6 +59,9 @@ public class Employee {
     protected void onCreate() {
         created = LocalDateTime.now();
         updated = LocalDateTime.now();
+        if (issuedAt == null) {
+            issuedAt = LocalDateTime.now();
+        }
     }
     
     @PreUpdate
