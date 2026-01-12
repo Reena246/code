@@ -1,7 +1,7 @@
 package com.company.badgemate.controller;
 
-import com.company.badgemate.dto.DatabaseCommand;
-import com.company.badgemate.service.DatabaseCommandService;
+import com.company.badgemate.dto.EventLog;
+import com.company.badgemate.service.EventLogService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -9,27 +9,27 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/database-command")
-@Tag(name = "Database Command", description = "API for handling database commands")
-public class DatabaseCommandController {
+@RequestMapping("/api/event-log")
+@Tag(name = "Event Log", description = "API for handling event logs")
+public class EventLogController {
     
-    private final DatabaseCommandService databaseCommandService;
+    private final EventLogService eventLogService;
     
     @Autowired
-    public DatabaseCommandController(DatabaseCommandService databaseCommandService) {
-        this.databaseCommandService = databaseCommandService;
+    public EventLogController(EventLogService eventLogService) {
+        this.eventLogService = eventLogService;
     }
     
     @PostMapping
-    @Operation(summary = "Process a database command", 
-               description = "Accepts a database command and processes it")
-    public ResponseEntity<String> processCommand(@RequestBody DatabaseCommand command) {
+    @Operation(summary = "Process an event log", 
+               description = "Accepts an event log and stores it in the audit table")
+    public ResponseEntity<String> processEventLog(@RequestBody EventLog eventLog) {
         try {
-            databaseCommandService.processDatabaseCommand(command);
-            return ResponseEntity.ok("Command processed successfully: " + command.getCommandId());
+            eventLogService.processEventLog(eventLog);
+            return ResponseEntity.ok("Event log processed successfully: " + eventLog.getEventId());
         } catch (Exception e) {
             return ResponseEntity.badRequest()
-                .body("Error processing command: " + e.getMessage());
+                .body("Error processing event log: " + e.getMessage());
         }
     }
 }
