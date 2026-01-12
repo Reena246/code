@@ -8,33 +8,23 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class EventLog {
-    
-    @JsonProperty("event_id")
-    private String eventId;
-    
-    @JsonProperty("event_type")
-    private EventType eventType;
-    
-    @JsonProperty("door_id")
-    private String doorId;
-    
-    @JsonProperty("card_hex")
-    private Long cardHex;
-    
-    @JsonProperty("user_name")
-    private String userName;
-    
-    @JsonProperty("details")
-    private String details;
-    
-    @JsonProperty("timestamp")
-    private Long timestamp;
+public class ServerHeartbeat {
     
     @JsonProperty("device_id")
     private String deviceId;
     
-    public enum EventType {
-        access_granted, access_denied, card_scan, system_event
-    }
+    @JsonProperty("timestamp")
+    private Long timestamp;
+    
+    @JsonProperty("is_online")
+    private Boolean isOnline;
+    
+    @JsonProperty("queue_size")
+    private Integer queueSize;
+    
+    @JsonProperty("db_version_hash")
+    private String dbVersionHash;
+    
+    @JsonProperty("uptime_seconds")
+    private Long uptimeSeconds;
 }
