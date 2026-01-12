@@ -1,9 +1,12 @@
 package com.company.badgemate.repository;
 
-import com.company.badgemate.entity.Floor;
+import com.company.badgemate.entity.Door;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.Optional;
+
 @Repository
-public interface FloorRepository extends JpaRepository<Floor, Long> {
+public interface DoorRepository extends JpaRepository<Door, Long> {
+    Optional<Door> findByDoorCode(String doorCode);
 }
