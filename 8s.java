@@ -1,30 +1,9 @@
-package com.company.badgemate.dto;
+package com.company.badgemate.repository;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import com.badgemate.entity.Company;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
 
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-public class ServerHeartbeat {
-    
-    @JsonProperty("device_id")
-    private String deviceId;
-    
-    @JsonProperty("timestamp")
-    private Long timestamp;
-    
-    @JsonProperty("is_online")
-    private Boolean isOnline;
-    
-    @JsonProperty("queue_size")
-    private Integer queueSize;
-    
-    @JsonProperty("db_version_hash")
-    private String dbVersionHash;
-    
-    @JsonProperty("uptime_seconds")
-    private Long uptimeSeconds;
+@Repository
+public interface CompanyRepository extends JpaRepository<Company, Long> {
 }
