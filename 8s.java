@@ -1,35 +1,37 @@
-package com.company.badgemate.controller;
+package com.company.badgemate.service;
 
 import com.company.badgemate.dto.CommandAcknowledgement;
-import com.company.badgemate.service.CommandAcknowledgementService;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
 
-@RestController
-@RequestMapping("/api/command-ack")
-@Tag(name = "Command Acknowledgement", description = "API for handling command acknowledgements")
-public class CommandAcknowledgementController {
+@Service
+public class CommandAcknowledgementService {
     
-    private final CommandAcknowledgementService commandAcknowledgementService;
+    private static final Logger logger = LoggerFactory.getLogger(CommandAcknowledgementService.class);
     
-    @Autowired
-    public CommandAcknowledgementController(CommandAcknowledgementService commandAcknowledgementService) {
-        this.commandAcknowledgementService = commandAcknowledgementService;
-    }
-    
-    @PostMapping
-    @Operation(summary = "Process a command acknowledgement", 
-               description = "Accepts a command acknowledgement and processes it")
-    public ResponseEntity<String> processAcknowledgement(@RequestBody CommandAcknowledgement acknowledgement) {
-        try {
-            commandAcknowledgementService.processAcknowledgement(acknowledgement);
-            return ResponseEntity.ok("Acknowledgement processed successfully: " + acknowledgement.getCommandId());
-        } catch (Exception e) {
-            return ResponseEntity.badRequest()
-                .body("Error processing acknowledgement: " + e.getMessage());
+    public void processAcknowledgement(CommandAcknowledgement acknowledgement) {
+        logger.info("Processing command acknowledgement: {} - Status: {}", 
+                   acknowledgement.getCommandId(), acknowledgement.getStatus());
+        
+        // Log the acknowledgement
+        switch (acknowledgement.getStatus()) {
+            case applied:
+                logger.info("Command {} successfully applied. Affected rows: {}", 
+                           acknowledgement.getCommandId(), acknowledgement.getAffectedRows());
+                break;
+            case failed:
+                logger.warn("Command {} failed. Reason: {}", 
+                           acknowledgement.getCommandId(), acknowledgement.getReason());
+                break;
+            case pending:
+                logger.info("Command {} is pending", acknowledgement.getCommandId());
+                break;
         }
+        
+        // In a production system, you might want to:
+        // - Update command status in database
+        // - Notify waiting processes
+        // - Retry failed commands
     }
 }
