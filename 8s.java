@@ -1,24 +1,29 @@
 {
-    "java.configuration.updateBuildConfiguration": "automatic",
-    "java.compile.nullAnalysis.mode": "automatic",
-    "java.configuration.runtimes": [
+    "version": "0.2.0",
+    "configurations": [
         {
-            "name": "JavaSE-21",
-            "path": "/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home",
-            "default": true
+            "type": "java",
+            "name": "Launch BadgeMate Application",
+            "request": "launch",
+            "mainClass": "com.company.badgemate.BadgeMateApplication",
+            "projectName": "badgemate-access-control",
+            "args": "",
+            "vmArgs": "-Dspring.profiles.active=default",
+            "env": {},
+            "console": "internalConsole",
+            "stopOnEntry": false
+        },
+        {
+            "type": "java",
+            "name": "Launch BadgeMate Application (Debug)",
+            "request": "launch",
+            "mainClass": "com.company.badgemate.BadgeMateApplication",
+            "projectName": "badgemate-access-control",
+            "args": "",
+            "vmArgs": "-Dspring.profiles.active=default -Xdebug",
+            "env": {},
+            "console": "internalConsole",
+            "stopOnEntry": false
         }
-    ],
-    "files.exclude": {
-        "**/.classpath": true,
-        "**/.project": true,
-        "**/.settings": true,
-        "**/.factorypath": true
-    },
-    "java.project.sourcePaths": [
-        "src/main/java"
-    ],
-    "java.project.outputPath": "target/classes",
-    "java.project.referencedLibraries": [
-        "target/**/*.jar"
     ]
 }
