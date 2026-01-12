@@ -8,27 +8,22 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "door_lock")
+@Table(name = "reader")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class DoorLock {
+public class Reader {
     
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "lock_id")
-    private Long lockId;
+    @Column(name = "reader_id")
+    private Long readerId;
     
     @Column(name = "door_id", nullable = false)
     private Long doorId;
     
-    @Enumerated(EnumType.STRING)
-    @Column(name = "lock_type", nullable = false)
-    private LockType lockType;
-    
-    @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false)
-    private LockStatus status = LockStatus.LOCKED;
+    @Column(name = "reader_code", length = 40, nullable = false)
+    private String readerCode;
     
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;
@@ -54,13 +49,5 @@ public class DoorLock {
     @PreUpdate
     protected void onUpdate() {
         updated = LocalDateTime.now();
-    }
-    
-    public enum LockType {
-        MAGNETIC, STRIKE
-    }
-    
-    public enum LockStatus {
-        LOCKED, UNLOCKED, FORCED
     }
 }
