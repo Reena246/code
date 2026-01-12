@@ -1,9 +1,9 @@
 package com.company.badgemate.repository;
 
-import com.company.badgemate.entity.Building;
+import com.company.badgemate.entity.Floor;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public interface BuildingRepository extends JpaRepository<Building, Long> {
+public interface FloorRepository extends JpaRepository<Floor, Long> {
 }
