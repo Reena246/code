@@ -8,37 +8,53 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "access_card")
+@Table(name = "audit")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class AccessCard {
+public class Audit {
     
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "audit_id")
+    private Long auditId;
+    
+    @Column(name = "company_id")
+    private Long companyId;
+    
+    @Column(name = "employee_pk")
+    private Long employeePk;
+    
     @Column(name = "card_id")
     private Long cardId;
     
-    @Column(name = "company_id", nullable = false)
-    private Long companyId;
+    @Column(name = "door_id")
+    private Long doorId;
     
-    @Column(name = "provider_id", nullable = false)
-    private Long providerId;
+    @Column(name = "reader_id")
+    private Long readerId;
     
-    @Column(name = "employee_pk", nullable = false)
-    private Long employeePk;
+    @Column(name = "event_time", nullable = false)
+    private LocalDateTime eventTime;
     
-    @Column(name = "card_uid", length = 40, nullable = false)
-    private String cardUid;
+    @Column(name = "opened_at")
+    private LocalDateTime openedAt;
     
-    @Column(name = "card_number", length = 40)
-    private String cardNumber;
+    @Column(name = "closed_at")
+    private LocalDateTime closedAt;
     
-    @Column(name = "issued_at", nullable = false)
-    private LocalDateTime issuedAt;
+    @Column(name = "open_seconds")
+    private Integer openSeconds;
     
-    @Column(name = "expires_at")
-    private LocalDateTime expiresAt;
+    @Column(name = "avg_open_seconds", precision = 10, scale = 2)
+    private java.math.BigDecimal avgOpenSeconds;
+    
+    @Enumerated(EnumType.STRING)
+    @Column(name = "result", nullable = false)
+    private AuditResult result;
+    
+    @Column(name = "reason", length = 100)
+    private String reason;
     
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;
@@ -59,13 +75,17 @@ public class AccessCard {
     protected void onCreate() {
         created = LocalDateTime.now();
         updated = LocalDateTime.now();
-        if (issuedAt == null) {
-            issuedAt = LocalDateTime.now();
+        if (eventTime == null) {
+            eventTime = LocalDateTime.now();
         }
     }
     
     @PreUpdate
     protected void onUpdate() {
         updated = LocalDateTime.now();
+    }
+    
+    public enum AuditResult {
+        SUCCESS, DENIED
     }
 }
