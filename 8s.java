@@ -1,10 +1,9 @@
-
 package com.company.badgemate.repository;
 
-import com.company.badgemate.entity.Site;
+import com.company.badgemate.entity.Building;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public interface SiteRepository extends JpaRepository<Site, Long> {
+public interface BuildingRepository extends JpaRepository<Building, Long> {
 }
