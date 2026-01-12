@@ -1,80 +1,72 @@
-package com.company.badgemate.config;
+package com.company.badgemate.service;
 
-import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.integration.channel.DirectChannel;
-import org.springframework.integration.mqtt.core.DefaultMqttPahoClientFactory;
-import org.springframework.integration.mqtt.core.MqttPahoClientFactory;
-import org.springframework.integration.mqtt.inbound.MqttPahoMessageDrivenChannelAdapter;
-import org.springframework.integration.mqtt.support.DefaultPahoMessageConverter;
-import org.springframework.messaging.MessageChannel;
+import com.company.badgemate.dto.*;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.messaging.Message;
+import org.springframework.messaging.MessageHandler;
+import org.springframework.messaging.MessagingException;
+import org.springframework.stereotype.Service;
 
-@Configuration
-public class MqttConfig {
+@Service
+public class MqttMessageService implements MessageHandler {
     
-    @Value("${mqtt.broker.url}")
-    private String brokerUrl;
+    private static final Logger logger = LoggerFactory.getLogger(MqttMessageService.class);
     
-    @Value("${mqtt.broker.clientId}")
-    private String clientId;
+    private final ObjectMapper objectMapper;
+    private final DatabaseCommandService databaseCommandService;
+    private final EventLogService eventLogService;
+    private final CommandAcknowledgementService commandAcknowledgementService;
+    private final ServerHeartbeatService serverHeartbeatService;
     
-    @Value("${mqtt.broker.username:}")
-    private String username;
-    
-    @Value("${mqtt.broker.password:}")
-    private String password;
-    
-    @Value("${mqtt.broker.connectionTimeout:30}")
-    private int connectionTimeout;
-    
-    @Value("${mqtt.broker.keepAliveInterval:60}")
-    private int keepAliveInterval;
-    
-    @Value("${mqtt.broker.autoReconnect:true}")
-    private boolean autoReconnect;
-    
-    @Value("${mqtt.broker.cleanSession:true}")
-    private boolean cleanSession;
-    
-    @Bean
-    public MqttPahoClientFactory mqttClientFactory() {
-        DefaultMqttPahoClientFactory factory = new DefaultMqttPahoClientFactory();
-        MqttConnectOptions options = new MqttConnectOptions();
-        options.setServerURIs(new String[]{brokerUrl});
-        if (!username.isEmpty()) {
-            options.setUserName(username);
-        }
-        if (!password.isEmpty()) {
-            options.setPassword(password.toCharArray());
-        }
-        options.setConnectionTimeout(connectionTimeout);
-        options.setKeepAliveInterval(keepAliveInterval);
-        options.setAutomaticReconnect(autoReconnect);
-        options.setCleanSession(cleanSession);
-        factory.setConnectionOptions(options);
-        return factory;
+    @Autowired
+    public MqttMessageService(ObjectMapper objectMapper,
+                             DatabaseCommandService databaseCommandService,
+                             EventLogService eventLogService,
+                             CommandAcknowledgementService commandAcknowledgementService,
+                             ServerHeartbeatService serverHeartbeatService) {
+        this.objectMapper = objectMapper;
+        this.databaseCommandService = databaseCommandService;
+        this.eventLogService = eventLogService;
+        this.commandAcknowledgementService = commandAcknowledgementService;
+        this.serverHeartbeatService = serverHeartbeatService;
     }
     
-    @Bean
-    public MessageChannel mqttInputChannel() {
-        return new DirectChannel();
-    }
-    
-    @Bean
-    public MqttPahoMessageDrivenChannelAdapter mqttInbound(
-            @Value("${mqtt.topic.database.command}") String dbCommandTopic,
-            @Value("${mqtt.topic.command.ack}") String commandAckTopic,
-            @Value("${mqtt.topic.event.log}") String eventLogTopic,
-            @Value("${mqtt.topic.server.heartbeat}") String heartbeatTopic) {
-        String[] topics = {dbCommandTopic, commandAckTopic, eventLogTopic, heartbeatTopic};
-        MqttPahoMessageDrivenChannelAdapter adapter = new MqttPahoMessageDrivenChannelAdapter(
-                clientId + "_inbound", mqttClientFactory(), topics);
-        adapter.setCompletionTimeout(5000);
-        adapter.setConverter(new DefaultPahoMessageConverter());
-        adapter.setQos(1);
-        adapter.setOutputChannel(mqttInputChannel());
-        return adapter;
+    @Override
+    public void handleMessage(Message<?> message) throws MessagingException {
+        try {
+            String topic = (String) message.getHeaders().get("mqtt_receivedTopic");
+            String payload = message.getPayload().toString();
+            
+            logger.info("Received MQTT message on topic: {}, payload: {}", topic, payload);
+            
+            if (topic == null) {
+                logger.warn("Received message without topic header");
+                return;
+            }
+            
+            // Determine message type based on topic
+            if (topic.contains("database/command")) {
+                DatabaseCommand command = objectMapper.readValue(payload, DatabaseCommand.class);
+                databaseCommandService.processDatabaseCommand(command);
+            } else if (topic.contains("command/ack")) {
+                CommandAcknowledgement ack = objectMapper.readValue(payload, CommandAcknowledgement.class);
+                commandAcknowledgementService.processAcknowledgement(ack);
+            } else if (topic.contains("event/log")) {
+                EventLog eventLog = objectMapper.readValue(payload, EventLog.class);
+                eventLogService.processEventLog(eventLog);
+            } else if (topic.contains("server/heartbeat")) {
+                ServerHeartbeat heartbeat = objectMapper.readValue(payload, ServerHeartbeat.class);
+                serverHeartbeatService.processHeartbeat(heartbeat);
+            } else {
+                logger.warn("Unknown topic: {}", topic);
+            }
+            
+        } catch (Exception e) {
+            logger.error("Error processing MQTT message", e);
+            throw new MessagingException("Failed to process MQTT message", e);
+        }
     }
 }
