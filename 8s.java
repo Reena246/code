@@ -1,33 +1,35 @@
-package com.company.badgemate.service;
+package com.company.badgemate.controller;
 
-import com.company.badgemate.dto.ServerHeartbeat;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
+import com.company.badgemate.dto.DatabaseCommand;
+import com.company.badgemate.service.DatabaseCommandService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 
-@Service
-public class ServerHeartbeatService {
+@RestController
+@RequestMapping("/api/database-command")
+@Tag(name = "Database Command", description = "API for handling database commands")
+public class DatabaseCommandController {
     
-    private static final Logger logger = LoggerFactory.getLogger(ServerHeartbeatService.class);
+    private final DatabaseCommandService databaseCommandService;
     
-    public void processHeartbeat(ServerHeartbeat heartbeat) {
-        logger.debug("Processing server heartbeat from device: {} - Online: {}, Queue: {}", 
-                    heartbeat.getDeviceId(), heartbeat.getIsOnline(), heartbeat.getQueueSize());
-        
-        // Log heartbeat information
-        if (!heartbeat.getIsOnline()) {
-            logger.warn("Device {} reports offline status", heartbeat.getDeviceId());
+    @Autowired
+    public DatabaseCommandController(DatabaseCommandService databaseCommandService) {
+        this.databaseCommandService = databaseCommandService;
+    }
+    
+    @PostMapping
+    @Operation(summary = "Process a database command", 
+               description = "Accepts a database command and processes it")
+    public ResponseEntity<String> processCommand(@RequestBody DatabaseCommand command) {
+        try {
+            databaseCommandService.processDatabaseCommand(command);
+            return ResponseEntity.ok("Command processed successfully: " + command.getCommandId());
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                .body("Error processing command: " + e.getMessage());
         }
-        
-        if (heartbeat.getQueueSize() != null && heartbeat.getQueueSize() > 100) {
-            logger.warn("Device {} has high queue size: {}", 
-                       heartbeat.getDeviceId(), heartbeat.getQueueSize());
-        }
-        
-        // In a production system, you might want to:
-        // - Update device status in database
-        // - Alert if device is offline
-        // - Monitor queue sizes
-        // - Track uptime statistics
     }
 }
