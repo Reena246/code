@@ -1,7 +1,7 @@
 package com.company.badgemate.controller;
 
-import com.company.badgemate.dto.EventLog;
-import com.company.badgemate.service.EventLogService;
+import com.company.badgemate.dto.ServerHeartbeat;
+import com.company.badgemate.service.ServerHeartbeatService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -9,27 +9,27 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/event-log")
-@Tag(name = "Event Log", description = "API for handling event logs")
-public class EventLogController {
+@RequestMapping("/api/server-heartbeat")
+@Tag(name = "Server Heartbeat", description = "API for handling server heartbeats")
+public class ServerHeartbeatController {
     
-    private final EventLogService eventLogService;
+    private final ServerHeartbeatService serverHeartbeatService;
     
     @Autowired
-    public EventLogController(EventLogService eventLogService) {
-        this.eventLogService = eventLogService;
+    public ServerHeartbeatController(ServerHeartbeatService serverHeartbeatService) {
+        this.serverHeartbeatService = serverHeartbeatService;
     }
     
     @PostMapping
-    @Operation(summary = "Process an event log", 
-               description = "Accepts an event log and stores it in the audit table")
-    public ResponseEntity<String> processEventLog(@RequestBody EventLog eventLog) {
+    @Operation(summary = "Process a server heartbeat", 
+               description = "Accepts a server heartbeat and processes it")
+    public ResponseEntity<String> processHeartbeat(@RequestBody ServerHeartbeat heartbeat) {
         try {
-            eventLogService.processEventLog(eventLog);
-            return ResponseEntity.ok("Event log processed successfully: " + eventLog.getEventId());
+            serverHeartbeatService.processHeartbeat(heartbeat);
+            return ResponseEntity.ok("Heartbeat processed successfully: " + heartbeat.getDeviceId());
         } catch (Exception e) {
             return ResponseEntity.badRequest()
-                .body("Error processing event log: " + e.getMessage());
+                .body("Error processing heartbeat: " + e.getMessage());
         }
     }
 }
