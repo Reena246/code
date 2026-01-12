@@ -1,29 +1,52 @@
 {
-    "version": "0.2.0",
-    "configurations": [
+    "version": "2.0.0",
+    "tasks": [
         {
-            "type": "java",
-            "name": "Launch BadgeMate Application",
-            "request": "launch",
-            "mainClass": "com.company.badgemate.BadgeMateApplication",
-            "projectName": "badgemate-access-control",
-            "args": "",
-            "vmArgs": "-Dspring.profiles.active=default",
-            "env": {},
-            "console": "internalConsole",
-            "stopOnEntry": false
+            "label": "maven: clean install",
+            "type": "shell",
+            "command": "mvn",
+            "args": [
+                "clean",
+                "install",
+                "-DskipTests"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "problemMatcher": []
         },
         {
-            "type": "java",
-            "name": "Launch BadgeMate Application (Debug)",
-            "request": "launch",
-            "mainClass": "com.company.badgemate.BadgeMateApplication",
-            "projectName": "badgemate-access-control",
-            "args": "",
-            "vmArgs": "-Dspring.profiles.active=default -Xdebug",
-            "env": {},
-            "console": "internalConsole",
-            "stopOnEntry": false
+            "label": "maven: spring-boot:run",
+            "type": "shell",
+            "command": "mvn",
+            "args": [
+                "spring-boot:run"
+            ],
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "maven: test",
+            "type": "shell",
+            "command": "mvn",
+            "args": [
+                "test"
+            ],
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "problemMatcher": []
         }
     ]
 }
