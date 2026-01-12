@@ -8,24 +8,33 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class CommandAcknowledgement {
+public class EventLog {
     
-    @JsonProperty("command_id")
-    private String commandId;
+    @JsonProperty("event_id")
+    private String eventId;
     
-    @JsonProperty("status")
-    private AcknowledgementStatus status;
+    @JsonProperty("event_type")
+    private EventType eventType;
     
-    @JsonProperty("reason")
-    private String reason;
+    @JsonProperty("door_id")
+    private String doorId;
+    
+    @JsonProperty("card_hex")
+    private Long cardHex;
+    
+    @JsonProperty("user_name")
+    private String userName;
+    
+    @JsonProperty("details")
+    private String details;
     
     @JsonProperty("timestamp")
     private Long timestamp;
     
-    @JsonProperty("affected_rows")
-    private String affectedRows;
+    @JsonProperty("device_id")
+    private String deviceId;
     
-    public enum AcknowledgementStatus {
-        applied, failed, pending
+    public enum EventType {
+        access_granted, access_denied, card_scan, system_event
     }
 }
