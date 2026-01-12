@@ -8,22 +8,25 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "job_title")
+@Table(name = "access_group")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class JobTitle {
+public class AccessGroup {
     
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "job_title_id")
-    private Long jobTitleId;
+    @Column(name = "access_group_id")
+    private Long accessGroupId;
     
     @Column(name = "company_id", nullable = false)
     private Long companyId;
     
-    @Column(name = "title_name", length = 40, nullable = false)
-    private String titleName;
+    @Column(name = "group_name", length = 50, nullable = false)
+    private String groupName;
+    
+    @Column(name = "description", length = 120)
+    private String description;
     
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;
