@@ -115,6 +115,8 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>${maven.surefire.plugin.version}</version>
                 <configuration>
+                    <!-- Necessary for Java 21+ -->
+                    <useModulePath>false</useModulePath>
                     <includes>
                         <include>**/*Test.java</include>
                         <include>**/*Tests.java</include>
