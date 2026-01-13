@@ -1,13 +1,9 @@
-package com.demo.accesscontrolsystem;
+package com.demo.accesscontrolsystem.dto;
 
-import org.springframework.boot.SpringApplication;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
+import lombok.Data;
 
-@SpringBootApplication
-public class AccessControlSystemApplication {
-
-    public static void main(String[] args) {
-        SpringApplication.run(AccessControlSystemApplication.class, args);
-    }
-
+@Data
+public class ValidateRequest {
+    private Long doorId;
+    private String cardHex;
 }
