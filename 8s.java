@@ -1,42 +1,9 @@
-package com.demo.accesscontrolsystem.entity;
+package com.demo.accesscontrolsystem.repository;
 
-import jakarta.persistence.*;
-import lombok.Data;
-import java.time.LocalDateTime;
+import com.demo.accesscontrolsystem.entity.AccessCard;
+import org.springframework.data.jpa.repository.JpaRepository;
+import java.util.Optional;
 
-@Data
-@Entity
-@Table(name = "audit")
-public class Audit {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long auditId;
-
-    private Long companyId;
-    private Long employeePk;
-    private Long cardId;
-    private Long doorId;
-    private Long readerId;
-
-    private LocalDateTime eventTime;
-    private LocalDateTime openedAt;
-    private LocalDateTime closedAt;
-
-    private Integer openSeconds;
-    private Double avgOpenSeconds;
-
-    @Enumerated(EnumType.STRING)
-    private ResultType result;
-
-    private String reason;
-    private Boolean isActive;
-    private LocalDateTime created;
-    private LocalDateTime updated;
-    private String createdBy;
-    private String updatedBy;
-
-    public enum ResultType {
-        SUCCESS, DENIED
-    }
+public interface AccessCardRepository extends JpaRepository<AccessCard, Long> {
+    Optional<AccessCard> findByCardUidAndIsActive(String cardUid, Boolean isActive);
 }
