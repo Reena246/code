@@ -1,36 +1,89 @@
-package com.demo.accesscontrolsystem.entity;
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         https://maven.apache.org/xsd/maven-4.0.0.xsd">
 
-import jakarta.persistence.*;
-import lombok.Data;
-import java.time.LocalDateTime;
+    <modelVersion>4.0.0</modelVersion>
 
-@Data
-@Entity
-@Table(name = "access_card")
-public class AccessCard {
+    <groupId>com.demo</groupId>
+    <artifactId>accesscontrolsystem</artifactId>
+    <version>1.0.0</version>
+    <packaging>jar</packaging>
+    <name>Access Control System</name>
+    <description>Spring Boot 4 + Java 21 backend for card access control</description>
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long cardId;
+    <properties>
+        <java.version>21</java.version>
+        <spring-boot.version>4.0.1</spring-boot.version>
+    </properties>
 
-    private Long companyId;
-    private Long providerId;
-    private Long employeePk;
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>${spring-boot.version}</version>
+        <relativePath />
+    </parent>
 
-    @Column(length = 40)
-    private String cardUid;
+    <dependencies>
+        <!-- Spring Boot Web -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
 
-    @Column(length = 40)
-    private String cardNumber;
+        <!-- Spring Data JPA -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
 
-    private LocalDateTime issuedAt;
-    private LocalDateTime expiresAt;
+        <!-- MySQL Driver -->
+        <dependency>
+            <groupId>com.mysql</groupId>
+            <artifactId>mysql-connector-j</artifactId>
+            <scope>runtime</scope>
+        </dependency>
 
-    private Boolean isActive;
+        <!-- Lombok -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <scope>provided</scope>
+        </dependency>
 
-    private LocalDateTime created;
-    private LocalDateTime updated;
+        <!-- Springdoc OpenAPI for Swagger UI -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>2.2.0</version>
+        </dependency>
 
-    private String createdBy;
-    private String updatedBy;
-}
+        <!-- Jakarta Validation -->
+        <dependency>
+            <groupId>jakarta.validation</groupId>
+            <artifactId>jakarta.validation-api</artifactId>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- Spring Boot Maven Plugin -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+
+            <!-- Compiler Plugin -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <source>${java.version}</source>
+                    <target>${java.version}</target>
+                    <encoding>UTF-8</encoding>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>
