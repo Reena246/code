@@ -10,14 +10,13 @@
     <version>1.0.0</version>
     <packaging>jar</packaging>
     <name>Access Control System</name>
-    <description>Spring Boot 4 + Java 21 backend for card access control system</description>
+    <description>Spring Boot 4 + Java 21 backend for access control</description>
 
     <properties>
         <java.version>21</java.version>
         <spring-boot.version>4.0.1</spring-boot.version>
-        <lombok.version>1.18.30</lombok.version>
         <springdoc.version>2.2.0</springdoc.version>
-        <mysql.version>8.1.0</mysql.version>
+        <lombok.version>1.18.30</lombok.version>
     </properties>
 
     <parent>
@@ -28,27 +27,13 @@
     </parent>
 
     <dependencies>
-        <!-- Spring Boot Web for REST APIs -->
+        <!-- Spring Boot Web (REST APIs) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
 
-        <!-- Spring Data JPA for database access -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-data-jpa</artifactId>
-        </dependency>
-
-        <!-- MySQL Driver -->
-        <dependency>
-            <groupId>com.mysql</groupId>
-            <artifactId>mysql-connector-j</artifactId>
-            <version>${mysql.version}</version>
-            <scope>runtime</scope>
-        </dependency>
-
-        <!-- Lombok to reduce boilerplate code -->
+        <!-- Lombok (optional, reduces boilerplate) -->
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
@@ -72,7 +57,7 @@
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
 
-            <!-- Maven Compiler Plugin -->
+            <!-- Compiler plugin -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
