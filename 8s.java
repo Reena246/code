@@ -10,13 +10,14 @@
     <version>1.0.0</version>
     <packaging>jar</packaging>
     <name>Access Control System</name>
-    <description>Spring Boot 4 + Java 21 backend for access control</description>
+    <description>Spring Boot 4 + Java 21 backend for access control demo</description>
 
     <properties>
         <java.version>21</java.version>
         <spring-boot.version>4.0.1</spring-boot.version>
         <springdoc.version>2.2.0</springdoc.version>
         <lombok.version>1.18.30</lombok.version>
+        <junit.jupiter.version>5.10.0</junit.jupiter.version>
     </properties>
 
     <parent>
@@ -27,13 +28,13 @@
     </parent>
 
     <dependencies>
-        <!-- Spring Boot Web (REST APIs) -->
+        <!-- Spring Boot Web -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
 
-        <!-- Lombok (optional, reduces boilerplate) -->
+        <!-- Lombok -->
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
@@ -46,6 +47,27 @@
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
             <version>${springdoc.version}</version>
+        </dependency>
+
+        <!-- Spring Boot Testing -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- JUnit 5 -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-api</artifactId>
+            <version>${junit.jupiter.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-engine</artifactId>
+            <version>${junit.jupiter.version}</version>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 
