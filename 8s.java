@@ -1,25 +1,18 @@
-package com.demo.accesscontrolsystem.controller;
+package com.demo.accesscontrolsystem.config;
 
-import com.demo.accesscontrolsystem.dto.ValidateRequest;
-import com.demo.accesscontrolsystem.dto.ValidateResponse;
-import com.demo.accesscontrolsystem.service.AccessService;
-import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.*;
+import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.info.Info;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 
-@RestController
-@RequestMapping("/api")
-@RequiredArgsConstructor
-public class AccessController {
+@Configuration
+public class SwaggerConfig {
 
-    private final AccessService accessService;
-
-    @PostMapping("/validate")
-    public ValidateResponse validateCard(@RequestBody ValidateRequest request) {
-        return accessService.validateCard(request);
-    }
-
-    @GetMapping("/server-heartbeat")
-    public String heartbeat(@RequestParam String deviceId) {
-        return "Server online, device: " + deviceId;
+    @Bean
+    public OpenAPI api() {
+        return new OpenAPI()
+                .info(new Info().title("Access Control API")
+                .description("APIs for validating card and logging events")
+                .version("1.0"));
     }
 }
