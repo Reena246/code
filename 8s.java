@@ -1,6 +1,11 @@
-package com.demo.accesscontrolsystem.repository;
+package com.demo.accesscontrolsystem.dto;
 
-import com.demo.accesscontrolsystem.entity.Audit;
-import org.springframework.data.jpa.repository.JpaRepository;
+import lombok.Data;
 
-public interface AuditRepository extends JpaRepository<Audit, Long> {}
+@Data
+public class ValidateRequest {
+    private String cardUid;
+    private Long doorId;
+    private Long readerId;
+    private String deviceId;
+}
