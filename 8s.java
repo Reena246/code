@@ -1,9 +1,36 @@
-spring.datasource.url=jdbc:mysql://localhost:3306/access_control_db
-spring.datasource.username=root
-spring.datasource.password=yourpassword
-spring.jpa.hibernate.ddl-auto=validate
-spring.jpa.show-sql=true
+package com.demo.accesscontrolsystem.entity;
 
-server.port=8080
-springdoc.api-docs.path=/api-docs
-springdoc.swagger-ui.path=/swagger-ui.html
+import jakarta.persistence.*;
+import lombok.Data;
+import java.time.LocalDateTime;
+
+@Data
+@Entity
+@Table(name = "access_card")
+public class AccessCard {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long cardId;
+
+    private Long companyId;
+    private Long providerId;
+    private Long employeePk;
+
+    @Column(length = 40)
+    private String cardUid;
+
+    @Column(length = 40)
+    private String cardNumber;
+
+    private LocalDateTime issuedAt;
+    private LocalDateTime expiresAt;
+
+    private Boolean isActive;
+
+    private LocalDateTime created;
+    private LocalDateTime updated;
+
+    private String createdBy;
+    private String updatedBy;
+}
