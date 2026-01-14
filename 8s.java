@@ -8,22 +8,19 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "card_provider")
+@Table(name = "company")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class CardProvider {
+public class Company {
     
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "provider_id")
-    private Long providerId;
-    
     @Column(name = "company_id")
     private Long companyId;
     
-    @Column(name = "provider_name", length = 30)
-    private String providerName;
+    @Column(name = "company_name", length = 60)
+    private String companyName;
     
     @Column(name = "is_active")
     private Boolean isActive;
