@@ -1,12 +1,32 @@
-package com.project.badgemate.repository;
+package com.project.badgemate.dto;
 
-import com.project.badgemate.entity.Reader;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
-import java.util.Optional;
+import java.util.Map;
 
-@Repository
-public interface ReaderRepository extends JpaRepository<Reader, Long> {
-    Optional<Reader> findByDoorIdAndIsActiveTrue(Long doorId);
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class DatabaseCommand {
+    
+    @JsonProperty("command_id")
+    private String commandId;
+    
+    @JsonProperty("command_type")
+    private String commandType; // INSERT, UPDATE, DELETE, SYNC, SYNC_RESPONSE
+    
+    @JsonProperty("table_name")
+    private String tableName;
+    
+    @JsonProperty("payload")
+    private Map<String, Object> payload;
+    
+    @JsonProperty("timestamp")
+    private Long timestamp;
+    
+    @JsonProperty("retry_count")
+    private Integer retryCount;
 }
