@@ -8,23 +8,14 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class ServerHeartbeat {
+public class ServerHeartbeatResponse {
     
-    @JsonProperty("device_id")
-    private String deviceId;
+    @JsonProperty("status")
+    private String status;
     
-    @JsonProperty("timestamp")
-    private Long timestamp;
+    @JsonProperty("timestamp_received")
+    private Long timestampReceived;
     
-    @JsonProperty("is_online")
-    private Boolean isOnline;
-    
-    @JsonProperty("queue_size")
-    private Integer queueSize;
-    
-    @JsonProperty("db_version_hash")
-    private String dbVersionHash;
-    
-    @JsonProperty("uptime_seconds")
-    private Long uptimeSeconds;
+    @JsonProperty("message")
+    private String message;
 }
