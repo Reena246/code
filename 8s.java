@@ -1,12 +1,57 @@
-package com.project.badgemate;
+package com.project.badgemate.entity;
 
-import org.springframework.boot.SpringApplication;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
+import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
-@SpringBootApplication
-public class BadgemateApplication {
+import java.time.LocalDateTime;
 
-    public static void main(String[] args) {
-        SpringApplication.run(BadgemateApplication.class, args);
-    }
+@Entity
+@Table(name = "access_card")
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class AccessCard {
+    
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "card_id")
+    private Long cardId;
+    
+    @Column(name = "company_id")
+    private Long companyId;
+    
+    @Column(name = "provider_id")
+    private Long providerId;
+    
+    @Column(name = "employee_pk")
+    private Long employeePk;
+    
+    @Column(name = "card_uid", length = 40)
+    private String cardUid;
+    
+    @Column(name = "card_number", length = 40)
+    private String cardNumber;
+    
+    @Column(name = "issued_at")
+    private LocalDateTime issuedAt;
+    
+    @Column(name = "expires_at")
+    private LocalDateTime expiresAt;
+    
+    @Column(name = "is_active")
+    private Boolean isActive;
+    
+    @Column(name = "created")
+    private LocalDateTime created;
+    
+    @Column(name = "updated")
+    private LocalDateTime updated;
+    
+    @Column(name = "created_by", length = 20)
+    private String createdBy;
+    
+    @Column(name = "updated_by", length = 20)
+    private String updatedBy;
 }
