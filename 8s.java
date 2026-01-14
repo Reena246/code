@@ -1,28 +1,25 @@
-package com.project.badgemate.config;
+# Server Configuration
+server.port=8080
+spring.application.name=badgemate
 
-import io.swagger.v3.oas.models.Components;
-import io.swagger.v3.oas.models.OpenAPI;
-import io.swagger.v3.oas.models.info.Info;
-import io.swagger.v3.oas.models.security.SecurityRequirement;
-import io.swagger.v3.oas.models.security.SecurityScheme;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
+# Database Configuration
+spring.datasource.url=jdbc:mysql://localhost:3306/access_control_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+spring.datasource.username=root
+spring.datasource.password=
+spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
 
-@Configuration
-public class SwaggerConfig {
-    
-    @Bean
-    public OpenAPI customOpenAPI() {
-        return new OpenAPI()
-            .info(new Info()
-                .title("Badgemate API")
-                .version("1.0.0")
-                .description("Internal Badgemate Access Control System API Documentation"))
-            .addSecurityItem(new SecurityRequirement().addList("basicAuth"))
-            .components(new Components()
-                .addSecuritySchemes("basicAuth", new SecurityScheme()
-                    .type(SecurityScheme.Type.HTTP)
-                    .scheme("basic")
-                    .description("Basic Authentication")));
-    }
-}
+# JPA/Hibernate Configuration
+spring.jpa.hibernate.ddl-auto=validate
+spring.jpa.show-sql=true
+spring.jpa.properties.hibernate.format_sql=true
+spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MySQLDialect
+
+# Swagger Configuration
+springdoc.api-docs.path=/api-docs
+springdoc.swagger-ui.path=/swagger-ui.html
+springdoc.swagger-ui.operationsSorter=method
+springdoc.swagger-ui.tagsSorter=alpha
+
+# Security Configuration
+spring.security.user.name=admin
+spring.security.user.password=admin123
