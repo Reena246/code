@@ -8,25 +8,22 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "floor")
+@Table(name = "job_title")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class Floor {
+public class JobTitle {
     
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "floor_id")
-    private Long floorId;
+    @Column(name = "job_title_id")
+    private Long jobTitleId;
     
-    @Column(name = "building_id")
-    private Long buildingId;
+    @Column(name = "company_id")
+    private Long companyId;
     
-    @Column(name = "floor_number")
-    private Short floorNumber;
-    
-    @Column(name = "floor_name", length = 40)
-    private String floorName;
+    @Column(name = "title_name", length = 40)
+    private String titleName;
     
     @Column(name = "is_active")
     private Boolean isActive;
