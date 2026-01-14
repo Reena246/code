@@ -1,15 +1,17 @@
 package com.project.badgemate.service;
 
-import com.project.badgemate.dto.CommandAcknowledgement;
+import com.project.badgemate.dto.ServerHeartbeat;
+import com.project.badgemate.dto.ServerHeartbeatResponse;
 import org.springframework.stereotype.Service;
 
 @Service
-public class CommandAckService {
+public class ServerHeartbeatService {
     
-    public void processCommandAcknowledgement(CommandAcknowledgement ack) {
-        // Process the acknowledgment
-        // In a real scenario, this would update command status, log, etc.
-        System.out.println("Received acknowledgment for command: " + ack.getCommandId() + 
-                          " with status: " + ack.getStatus());
+    public ServerHeartbeatResponse processHeartbeat(ServerHeartbeat heartbeat) {
+        ServerHeartbeatResponse response = new ServerHeartbeatResponse();
+        response.setStatus("ok");
+        response.setTimestampReceived(System.currentTimeMillis() / 1000);
+        response.setMessage("Heartbeat received from device: " + heartbeat.getDeviceId());
+        return response;
     }
 }
