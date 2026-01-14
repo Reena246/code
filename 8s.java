@@ -5,28 +5,57 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.io.Serializable;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "access_group_door")
+@Table(name = "audit")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-@IdClass(AccessGroupDoor.AccessGroupDoorId.class)
-public class AccessGroupDoor {
+public class Audit {
     
     @Id
-    @Column(name = "access_group_id")
-    private Long accessGroupId;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "audit_id")
+    private Long auditId;
     
-    @Id
+    @Column(name = "company_id")
+    private Long companyId;
+    
+    @Column(name = "employee_pk")
+    private Long employeePk;
+    
+    @Column(name = "card_id")
+    private Long cardId;
+    
     @Column(name = "door_id")
     private Long doorId;
     
+    @Column(name = "reader_id")
+    private Long readerId;
+    
+    @Column(name = "event_time")
+    private LocalDateTime eventTime;
+    
+    @Column(name = "opened_at")
+    private LocalDateTime openedAt;
+    
+    @Column(name = "closed_at")
+    private LocalDateTime closedAt;
+    
+    @Column(name = "open_seconds")
+    private Integer openSeconds;
+    
+    @Column(name = "avg_open_seconds", precision = 10, scale = 2)
+    private BigDecimal avgOpenSeconds;
+    
     @Enumerated(EnumType.STRING)
-    @Column(name = "access_type", length = 5)
-    private AccessType accessType;
+    @Column(name = "result", length = 7)
+    private AuditResult result;
+    
+    @Column(name = "reason", length = 100)
+    private String reason;
     
     @Column(name = "is_active")
     private Boolean isActive;
@@ -43,15 +72,7 @@ public class AccessGroupDoor {
     @Column(name = "updated_by", length = 20)
     private String updatedBy;
     
-    public enum AccessType {
-        ALLOW, DENY
-    }
-    
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class AccessGroupDoorId implements Serializable {
-        private Long accessGroupId;
-        private Long doorId;
+    public enum AuditResult {
+        SUCCESS, DENIED
     }
 }
