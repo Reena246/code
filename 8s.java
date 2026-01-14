@@ -8,20 +8,23 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class EventLogResponse {
+public class ServerHeartbeat {
     
-    @JsonProperty("status")
-    private String status; // access_granted, access_denied
+    @JsonProperty("device_id")
+    private String deviceId;
     
-    @JsonProperty("door_type")
-    private String doorType; // MAGNETIC, STRIKE
+    @JsonProperty("timestamp")
+    private Long timestamp;
     
-    @JsonProperty("timestamp_sent")
-    private Long timestampSent;
+    @JsonProperty("is_online")
+    private Boolean isOnline;
     
-    @JsonProperty("opened_at")
-    private Long openedAt;
+    @JsonProperty("queue_size")
+    private Integer queueSize;
     
-    @JsonProperty("closed_at")
-    private Long closedAt;
+    @JsonProperty("db_version_hash")
+    private String dbVersionHash;
+    
+    @JsonProperty("uptime_seconds")
+    private Long uptimeSeconds;
 }
