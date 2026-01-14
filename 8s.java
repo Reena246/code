@@ -5,28 +5,23 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.Map;
-
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class DatabaseCommand {
+public class CommandAcknowledgement {
     
     @JsonProperty("command_id")
     private String commandId;
     
-    @JsonProperty("command_type")
-    private String commandType; // INSERT, UPDATE, DELETE, SYNC, SYNC_RESPONSE
+    @JsonProperty("status")
+    private String status; // applied, failed, pending
     
-    @JsonProperty("table_name")
-    private String tableName;
-    
-    @JsonProperty("payload")
-    private Map<String, Object> payload;
+    @JsonProperty("reason")
+    private String reason;
     
     @JsonProperty("timestamp")
     private Long timestamp;
     
-    @JsonProperty("retry_count")
-    private Integer retryCount;
+    @JsonProperty("affected_rows")
+    private Integer affectedRows;
 }
