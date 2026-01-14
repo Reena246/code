@@ -1,64 +1,48 @@
-package com.project.badgemate.controller;
+package com.project.badgemate.config;
 
-import com.project.badgemate.dto.*;
-import com.project.badgemate.service.*;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.provisioning.InMemoryUserDetailsManager;
+import org.springframework.security.web.SecurityFilterChain;
 
-@RestController
-@RequestMapping("/api")
-@Tag(name = "Badgemate API", description = "Access control system APIs")
-public class ApiController {
+@Configuration
+@EnableWebSecurity
+public class SecurityConfig {
     
-    @Autowired
-    private DatabaseCommandService databaseCommandService;
-    
-    @Autowired
-    private CommandAckService commandAckService;
-    
-    @Autowired
-    private EventLogService eventLogService;
-    
-    @Autowired
-    private ServerHeartbeatService serverHeartbeatService;
-    
-    @PostMapping("/database-command")
-    @Operation(summary = "Process database command", 
-               description = "Accepts database commands (INSERT, UPDATE, DELETE, SYNC, SYNC_RESPONSE) and returns acknowledgment")
-    public ResponseEntity<CommandAcknowledgement> processDatabaseCommand(
-            @Valid @RequestBody DatabaseCommand command) {
-        CommandAcknowledgement ack = databaseCommandService.processDatabaseCommand(command);
-        return ResponseEntity.ok(ack);
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http
+            .csrf(AbstractHttpConfigurer::disable)
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**", "/api-docs/**", "/swagger-resources/**", "/webjars/**").permitAll()
+                .anyRequest().authenticated()
+            )
+            .httpBasic(httpBasic -> {});
+        
+        return http.build();
     }
     
-    @PostMapping("/command-ack")
-    @Operation(summary = "Receive command acknowledgment", 
-               description = "Accepts command acknowledgments from external systems")
-    public ResponseEntity<String> receiveCommandAck(
-            @Valid @RequestBody CommandAcknowledgement ack) {
-        commandAckService.processCommandAcknowledgement(ack);
-        return ResponseEntity.ok("Acknowledgment received");
+    @Bean
+    public UserDetailsService userDetailsService() {
+        UserDetails user = User.builder()
+            .username("admin")
+            .password(passwordEncoder().encode("admin123"))
+            .roles("USER", "ADMIN")
+            .build();
+        
+        return new InMemoryUserDetailsManager(user);
     }
     
-    @PostMapping("/event-log")
-    @Operation(summary = "Process event log", 
-               description = "Processes card scan events, validates access, and creates audit entries")
-    public ResponseEntity<EventLogResponse> processEventLog(
-            @Valid @RequestBody EventLog eventLog) {
-        EventLogResponse response = eventLogService.processEventLog(eventLog);
-        return ResponseEntity.ok(response);
-    }
-    
-    @PostMapping("/server-heartbeat")
-    @Operation(summary = "Receive server heartbeat", 
-               description = "Accepts heartbeat messages from devices/servers")
-    public ResponseEntity<ServerHeartbeatResponse> receiveHeartbeat(
-            @Valid @RequestBody ServerHeartbeat heartbeat) {
-        ServerHeartbeatResponse response = serverHeartbeatService.processHeartbeat(heartbeat);
-        return ResponseEntity.ok(response);
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
     }
 }
