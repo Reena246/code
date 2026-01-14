@@ -8,32 +8,20 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class EventLog {
+public class EventLogResponse {
     
-    @JsonProperty("event_id")
-    private String eventId;
+    @JsonProperty("status")
+    private String status; // access_granted, access_denied
     
-    @JsonProperty("event_type")
-    private String eventType;
+    @JsonProperty("door_type")
+    private String doorType; // MAGNETIC, STRIKE
     
-    @JsonProperty("door_id")
-    private Long doorId;
+    @JsonProperty("timestamp_sent")
+    private Long timestampSent;
     
-    @JsonProperty("card_hex")
-    private String cardHex;
+    @JsonProperty("opened_at")
+    private Long openedAt;
     
-    @JsonProperty("user_name")
-    private String userName;
-    
-    @JsonProperty("details")
-    private String details;
-    
-    @JsonProperty("timestamp")
-    private Long timestamp;
-    
-    @JsonProperty("device_id")
-    private String deviceId;
-    
-    @JsonProperty("company_id")
-    private Long companyId;
+    @JsonProperty("closed_at")
+    private Long closedAt;
 }
