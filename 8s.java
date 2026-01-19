@@ -1,31 +1,22 @@
-package com.project.badgemate.dto;
+package com.project.badgemate.repository;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import com.project.badgemate.entity.AccessGroupDoor;
+import com.project.badgemate.entity.AccessGroupDoorId;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
 
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-public class EventLogResponse {
+import java.util.List;
+import java.util.Optional;
+
+@Repository
+public interface AccessGroupDoorRepository extends JpaRepository<AccessGroupDoor, AccessGroupDoorId> {
     
-    @JsonProperty("event_id")
-    private String eventId;
+    @Query("SELECT agd FROM AccessGroupDoor agd WHERE agd.accessGroupId = :accessGroupId AND agd.doorId = :doorId AND agd.isActive = true")
+    Optional<AccessGroupDoor> findByAccessGroupIdAndDoorId(@Param("accessGroupId") Long accessGroupId, 
+                                                           @Param("doorId") Long doorId);
     
-    @JsonProperty("access_status")
-    private AccessStatus accessStatus;
-    
-    @JsonProperty("reason")
-    private String reason;
-    
-    @JsonProperty("timestamp")
-    private Long timestamp;
-    
-    @JsonProperty("door_lock_type")
-    private String doorLockType;  // Fetched from database
-    
-    public enum AccessStatus {
-        access_granted, access_denied
-    }
+    @Query("SELECT agd FROM AccessGroupDoor agd WHERE agd.doorId = :doorId AND agd.isActive = true")
+    List<AccessGroupDoor> findByDoorId(@Param("doorId") Long doorId);
 }
