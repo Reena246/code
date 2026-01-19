@@ -5,17 +5,27 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "company")
+@Table(name = "door")
 @Data
-public class Company {
+public class Door {
     
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "company_id")
-    private Long companyId;
+    @Column(name = "door_id")
+    private Long doorId;
     
-    @Column(name = "company_name", length = 60)
-    private String companyName;
+    @Column(name = "floor_id")
+    private Long floorId;
+    
+    @Column(name = "door_code", length = 30)
+    private String doorCode;
+    
+    @Column(name = "door_number")
+    private Short doorNumber;
+    
+    @Enumerated(EnumType.STRING)
+    @Column(name = "lock_type", columnDefinition = "ENUM('MAGNETIC','STRIKE')")
+    private LockType lockType;
     
     @Column(name = "is_active")
     private Boolean isActive;
@@ -31,4 +41,8 @@ public class Company {
     
     @Column(name = "updated_by", length = 20)
     private String updatedBy;
+    
+    public enum LockType {
+        MAGNETIC, STRIKE
+    }
 }
