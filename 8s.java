@@ -5,35 +5,23 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "access_card")
+@Table(name = "access_group")
 @Data
-public class AccessCard {
+public class AccessGroup {
     
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "card_id")
-    private Long cardId;
+    @Column(name = "access_group_id")
+    private Long accessGroupId;
     
     @Column(name = "company_id")
     private Long companyId;
     
-    @Column(name = "provider_id")
-    private Long providerId;
+    @Column(name = "group_name", length = 50)
+    private String groupName;
     
-    @Column(name = "employee_pk")
-    private Long employeePk;
-    
-    @Column(name = "card_uid", length = 40)
-    private String cardUid;
-    
-    @Column(name = "card_number", length = 40)
-    private String cardNumber;
-    
-    @Column(name = "issued_at")
-    private LocalDateTime issuedAt;
-    
-    @Column(name = "expires_at")
-    private LocalDateTime expiresAt;
+    @Column(name = "description", length = 120)
+    private String description;
     
     @Column(name = "is_active")
     private Boolean isActive;
