@@ -1,26 +1,12 @@
-# Server Configuration
-server.port=8080
-spring.application.name=badgemate
+package com.project.accesscontrol;
 
-# Database Configuration
-spring.datasource.url=jdbc:mysql://localhost:3306/access_control_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
-spring.datasource.username=root
-spring.datasource.password=
-spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
 
-# JPA/Hibernate Configuration
-spring.jpa.hibernate.ddl-auto=validate
-spring.jpa.show-sql=true
-spring.jpa.properties.hibernate.format_sql=true
-spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MySQLDialect
-spring.jpa.properties.hibernate.jdbc.time_zone=UTC
+@SpringBootApplication
+public class BadgemateApplication {
 
-# Swagger Configuration
-springdoc.api-docs.path=/api-docs
-springdoc.swagger-ui.path=/swagger-ui.html
-springdoc.swagger-ui.operationsSorter=method
-springdoc.swagger-ui.tagsSorter=alpha
-
-# Basic Authentication
-spring.security.user.name=admin
-spring.security.user.password=admin123
+    public static void main(String[] args) {
+        SpringApplication.run(BadgemateApplication.class, args);
+    }
+}
