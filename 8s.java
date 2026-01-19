@@ -1,88 +1,109 @@
-package com.project.badgemate.controller;
-
-import com.project.badgemate.dto.EventLog;
-import com.project.badgemate.dto.EventLogResponse;
-import com.project.badgemate.service.EventLogService;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.Schema;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-
-@RestController
-@RequestMapping("/api/event-log")
-@Tag(name = "Event Log", description = "API for handling door access event logs with card validation")
-public class EventLogController {
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 
+         https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
     
-    private final EventLogService eventLogService;
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.3.0</version>
+        <relativePath/>
+    </parent>
     
-    @Autowired
-    public EventLogController(EventLogService eventLogService) {
-        this.eventLogService = eventLogService;
-    }
+    <groupId>com.company</groupId>
+    <artifactId>badgemate</artifactId>
+    <version>1.0.0</version>
+    <name>BadgeMate Access Control System</name>
+    <description>Access Control System with Real-time Card Validation</description>
     
-    @PostMapping
-    @Operation(
-        summary = "Process a door access event log", 
-        description = "Validates card access using access_card, employee, and access_group_door tables. " +
-                      "Returns access_granted or access_denied response. Accepts opened_at and closed_at timestamps " +
-                      "to calculate open_seconds and avg_open_seconds. Automatically fetches door.lock_type from database."
-    )
-    @ApiResponses(value = {
-        @ApiResponse(
-            responseCode = "200",
-            description = "Event log processed successfully",
-            content = @Content(schema = @Schema(implementation = EventLogResponse.class))
-        ),
-        @ApiResponse(
-            responseCode = "400",
-            description = "Invalid event log or validation error",
-            content = @Content(schema = @Schema(implementation = EventLogResponse.class))
-        )
-    })
-    public ResponseEntity<EventLogResponse> processEventLog(@RequestBody EventLog eventLog) {
-        // Validate required fields
-        String eventId = eventLog.getEventId();
-        if (eventId == null || eventId.isEmpty()) {
-            EventLogResponse errorResponse = new EventLogResponse();
-            errorResponse.setEventId("unknown");
-            errorResponse.setAccessStatus(EventLogResponse.AccessStatus.access_denied);
-            errorResponse.setReason("event_id is required");
-            errorResponse.setTimestamp(System.currentTimeMillis() / 1000);
-            return ResponseEntity.badRequest().body(errorResponse);
-        }
+    <properties>
+        <java.version>21</java.version>
+        <maven.compiler.source>21</maven.compiler.source>
+        <maven.compiler.target>21</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+    
+    <dependencies>
+        <!-- Spring Boot Starters -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
         
-        if (eventLog.getCardHex() == null) {
-            EventLogResponse errorResponse = new EventLogResponse();
-            errorResponse.setEventId(eventId);
-            errorResponse.setAccessStatus(EventLogResponse.AccessStatus.access_denied);
-            errorResponse.setReason("card_hex is required");
-            errorResponse.setTimestamp(System.currentTimeMillis() / 1000);
-            return ResponseEntity.badRequest().body(errorResponse);
-        }
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
         
-        String doorId = eventLog.getDoorId();
-        if (doorId == null || doorId.isEmpty()) {
-            EventLogResponse errorResponse = new EventLogResponse();
-            errorResponse.setEventId(eventId);
-            errorResponse.setAccessStatus(EventLogResponse.AccessStatus.access_denied);
-            errorResponse.setReason("door_id is required");
-            errorResponse.setTimestamp(System.currentTimeMillis() / 1000);
-            return ResponseEntity.badRequest().body(errorResponse);
-        }
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
         
-        // Process the event log
-        EventLogResponse response = eventLogService.processEventLog(eventLog);
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
         
-        // Return appropriate HTTP status based on access status
-        if (response.getAccessStatus() == EventLogResponse.AccessStatus.access_granted) {
-            return ResponseEntity.ok(response);
-        } else {
-            return ResponseEntity.badRequest().body(response);
-        }
-    }
-}
+        <!-- MySQL Driver -->
+        <dependency>
+            <groupId>com.mysql</groupId>
+            <artifactId>mysql-connector-j</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        
+        <!-- Swagger/OpenAPI -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>2.3.0</version>
+        </dependency>
+        
+        <!-- Lombok (optional but useful) -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+        
+        <!-- Spring Boot DevTools -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-devtools</artifactId>
+            <scope>runtime</scope>
+            <optional>true</optional>
+        </dependency>
+        
+        <!-- Spring Boot Test -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+    
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <excludes>
+                        <exclude>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                        </exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
