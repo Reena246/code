@@ -1,47 +1,56 @@
-package com.project.badgemate.service;
+package com.project.badgemate.controller;
 
 import com.project.badgemate.dto.ServerHeartbeat;
 import com.project.badgemate.dto.ServerHeartbeatResponse;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
+import com.project.badgemate.service.ServerHeartbeatService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 
-import java.time.Instant;
-
-@Service
-public class ServerHeartbeatService {
+@RestController
+@RequestMapping("/api/server-heartbeat")
+@Tag(name = "Server Heartbeat", description = "API for handling server heartbeats")
+public class ServerHeartbeatController {
     
-    private static final Logger logger = LoggerFactory.getLogger(ServerHeartbeatService.class);
+    private final ServerHeartbeatService serverHeartbeatService;
     
-    public ServerHeartbeatResponse processHeartbeat(ServerHeartbeat heartbeat) {
-        logger.debug("Processing server heartbeat from device: {} - Online: {}, Queue: {}", 
-                    heartbeat.getDeviceId(), heartbeat.getIsOnline(), heartbeat.getQueueSize());
-        
-        long timestampReceived = Instant.now().getEpochSecond();
-        
-        // Log heartbeat information
-        if (!Boolean.TRUE.equals(heartbeat.getIsOnline())) {
-            logger.warn("Device {} reports offline status", heartbeat.getDeviceId());
+    @Autowired
+    public ServerHeartbeatController(ServerHeartbeatService serverHeartbeatService) {
+        this.serverHeartbeatService = serverHeartbeatService;
+    }
+    
+    @PostMapping
+    @Operation(
+        summary = "Process a server heartbeat", 
+        description = "Accepts a server heartbeat and responds with server status and timestamp_received"
+    )
+    @ApiResponses(value = {
+        @ApiResponse(
+            responseCode = "200",
+            description = "Heartbeat processed successfully",
+            content = @Content(schema = @Schema(implementation = ServerHeartbeatResponse.class))
+        )
+    })
+    public ResponseEntity<ServerHeartbeatResponse> processHeartbeat(@RequestBody ServerHeartbeat heartbeat) {
+        // Validate required fields
+        if (heartbeat.getDeviceId() == null || heartbeat.getDeviceId().isEmpty()) {
+            ServerHeartbeatResponse errorResponse = new ServerHeartbeatResponse();
+            errorResponse.setDeviceId("unknown");
+            errorResponse.setServerStatus("error");
+            errorResponse.setTimestampReceived(System.currentTimeMillis() / 1000);
+            errorResponse.setMessage("device_id is required");
+            return ResponseEntity.badRequest().body(errorResponse);
         }
         
-        if (heartbeat.getQueueSize() != null && heartbeat.getQueueSize() > 100) {
-            logger.warn("Device {} has high queue size: {}", 
-                       heartbeat.getDeviceId(), heartbeat.getQueueSize());
-        }
+        // Process the heartbeat
+        ServerHeartbeatResponse response = serverHeartbeatService.processHeartbeat(heartbeat);
         
-        // Create response
-        ServerHeartbeatResponse response = new ServerHeartbeatResponse();
-        response.setDeviceId(heartbeat.getDeviceId());
-        response.setServerStatus("online");
-        response.setTimestampReceived(timestampReceived);
-        response.setMessage("Heartbeat received successfully");
-        
-        // In a production system, you might want to:
-        // - Update device status in database
-        // - Alert if device is offline
-        // - Monitor queue sizes
-        // - Track uptime statistics
-        
-        return response;
+        return ResponseEntity.ok(response);
     }
 }
