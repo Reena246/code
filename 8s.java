@@ -357,3 +357,95 @@ public class DatabaseCommandService {
         return ack;
     }
 }
+
+
+
+package com.project.badgemate.controller;
+
+import com.project.badgemate.dto.CommandAcknowledgement;
+import com.project.badgemate.dto.DatabaseCommand;
+import com.project.badgemate.service.DatabaseCommandService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/database-command")
+@Tag(name = "Database Command", description = "API for handling dynamic database commands on any table")
+public class DatabaseCommandController {
+    
+    private final DatabaseCommandService databaseCommandService;
+    
+    @Autowired
+    public DatabaseCommandController(DatabaseCommandService databaseCommandService) {
+        this.databaseCommandService = databaseCommandService;
+    }
+    
+    @PostMapping
+    @Operation(
+        summary = "Process a database command", 
+        description = "Accepts a database command and dynamically executes INSERT, UPDATE, or DELETE on any table. " +
+                      "The payload keys are automatically mapped to table columns. Returns CommandAcknowledgement with status and affected rows."
+    )
+    @ApiResponses(value = {
+        @ApiResponse(
+            responseCode = "200",
+            description = "Command processed successfully",
+            content = @Content(schema = @Schema(implementation = CommandAcknowledgement.class))
+        ),
+        @ApiResponse(
+            responseCode = "400",
+            description = "Invalid command or validation error",
+            content = @Content(schema = @Schema(implementation = CommandAcknowledgement.class))
+        )
+    })
+    public ResponseEntity<CommandAcknowledgement> processCommand(@RequestBody DatabaseCommand command) {
+        // Validate required fields
+        if (command.getCommandId() == null || command.getCommandId().isEmpty()) {
+            CommandAcknowledgement errorAck = new CommandAcknowledgement();
+            errorAck.setCommandId(command.getCommandId() != null ? command.getCommandId() : "unknown");
+            errorAck.setStatus(CommandAcknowledgement.AcknowledgementStatus.failed);
+            errorAck.setReason("command_id is required");
+            errorAck.setTimestamp(System.currentTimeMillis() / 1000);
+            errorAck.setAffectedRows("0");
+            return ResponseEntity.badRequest().body(errorAck);
+        }
+        
+        if (command.getCommandType() == null) {
+            CommandAcknowledgement errorAck = new CommandAcknowledgement();
+            errorAck.setCommandId(command.getCommandId());
+            errorAck.setStatus(CommandAcknowledgement.AcknowledgementStatus.failed);
+            errorAck.setReason("command_type is required");
+            errorAck.setTimestamp(System.currentTimeMillis() / 1000);
+            errorAck.setAffectedRows("0");
+            return ResponseEntity.badRequest().body(errorAck);
+        }
+        
+        if (command.getTableName() == null || command.getTableName().isEmpty()) {
+            CommandAcknowledgement errorAck = new CommandAcknowledgement();
+            errorAck.setCommandId(command.getCommandId());
+            errorAck.setStatus(CommandAcknowledgement.AcknowledgementStatus.failed);
+            errorAck.setReason("table_name is required");
+            errorAck.setTimestamp(System.currentTimeMillis() / 1000);
+            errorAck.setAffectedRows("0");
+            return ResponseEntity.badRequest().body(errorAck);
+        }
+        
+        // Process the command
+        CommandAcknowledgement acknowledgement = databaseCommandService.processDatabaseCommand(command);
+        
+        // Return appropriate HTTP status based on acknowledgement status
+        if (acknowledgement.getStatus() == CommandAcknowledgement.AcknowledgementStatus.applied) {
+            return ResponseEntity.ok(acknowledgement);
+        } else {
+            return ResponseEntity.badRequest().body(acknowledgement);
+        }
+    }
+}
+
