@@ -5,20 +5,32 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "reader")
+@Table(name = "site")
 @Data
-public class Reader {
+public class Site {
     
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "reader_id")
-    private Long readerId;
+    @Column(name = "site_id")
+    private Long siteId;
     
-    @Column(name = "door_id")
-    private Long doorId;
+    @Column(name = "company_id")
+    private Long companyId;
     
-    @Column(name = "reader_code", length = 40)
-    private String readerCode;
+    @Column(name = "site_name", length = 80)
+    private String siteName;
+    
+    @Column(name = "address_line1", length = 120)
+    private String addressLine1;
+    
+    @Column(name = "city", length = 60)
+    private String city;
+    
+    @Column(name = "state", length = 40)
+    private String state;
+    
+    @Column(name = "country", length = 40)
+    private String country;
     
     @Column(name = "is_active")
     private Boolean isActive;
