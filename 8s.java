@@ -1,9 +1,11 @@
 package com.company.badgemate.repository;
 
-import com.company.badgemate.entity.Company;
+import com.company.badgemate.entity.DoorLock;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
+import java.util.List;
 
 @Repository
-public interface CompanyRepository extends JpaRepository<Company, Long> {
+public interface DoorLockRepository extends JpaRepository<DoorLock, Long> {
+    List<DoorLock> findByDoorIdAndIsActiveTrue(Long doorId);
 }
