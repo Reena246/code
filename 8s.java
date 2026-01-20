@@ -1,11 +1,9 @@
 package com.company.badgemate.repository;
 
-import com.company.badgemate.entity.DoorLock;
+import com.company.badgemate.entity.Floor;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
-import java.util.List;
 
 @Repository
-public interface DoorLockRepository extends JpaRepository<DoorLock, Long> {
-    List<DoorLock> findByDoorIdAndIsActiveTrue(Long doorId);
+public interface FloorRepository extends JpaRepository<Floor, Long> {
 }
