@@ -1,48 +1,32 @@
 package com.project.accesscontrol.config;
 
+import io.swagger.v3.oas.annotations.enums.SecuritySchemeType;
+import io.swagger.v3.oas.annotations.security.SecurityScheme;
+import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.info.Info;
+import io.swagger.v3.oas.models.info.Contact;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
-import org.springframework.security.core.userdetails.User;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.provisioning.InMemoryUserDetailsManager;
-import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
-@EnableWebSecurity
-public class SecurityConfig {
+@SecurityScheme(
+    name = "basicAuth",
+    type = SecuritySchemeType.HTTP,
+    scheme = "basic"
+)
+public class SwaggerConfig {
     
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        http
-            .csrf(AbstractHttpConfigurer::disable)
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/api-docs/**").permitAll()
-                .anyRequest().authenticated()
-            )
-            .httpBasic(httpBasic -> {});
-        
-        return http.build();
-    }
-    
-    @Bean
-    public UserDetailsService userDetailsService() {
-        UserDetails user = User.builder()
-            .username("admin")
-            .password(passwordEncoder().encode("admin123"))
-            .roles("USER", "ADMIN")
-            .build();
-        
-        return new InMemoryUserDetailsManager(user);
-    }
-    
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
+    public OpenAPI customOpenAPI() {
+        return new OpenAPI()
+            .info(new Info()
+                .title("BadgeMate Access Control API")
+                .version("1.0.0")
+                .description("REST API for real-time access control system with card validation and audit logging")
+                .contact(new Contact()
+                    .name("BadgeMate Support")
+                    .email("support@badgemate.com")
+                )
+            );
     }
 }
