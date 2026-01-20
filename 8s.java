@@ -1,138 +1,174 @@
-package com.project.accesscontrol.service;
+package com.project.accesscontrol.controller;
 
-import com.project.accesscontrol.dto.DatabaseCommand;
-import com.project.accesscontrol.dto.CommandAcknowledgement;
+import com.project.accesscontrol.dto.*;
+import com.project.accesscontrol.entity.Audit;
+import com.project.accesscontrol.repository.ReaderRepository;
+import com.project.accesscontrol.service.AuditService;
+import com.project.accesscontrol.service.CardValidationService;
+import com.project.accesscontrol.service.DatabaseCommandService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
-@Service
-public class DatabaseCommandService {
+@RestController
+@RequestMapping("/api")
+@Tag(name = "Access Control API", description = "API endpoints for access control system")
+public class ApiController {
     
     @Autowired
-    private JdbcTemplate jdbcTemplate;
+    private DatabaseCommandService databaseCommandService;
     
-    @Transactional
-    public CommandAcknowledgement processCommand(DatabaseCommand command) {
-        CommandAcknowledgement ack = new CommandAcknowledgement();
-        ack.setCommandId(command.getCommandId());
-        ack.setTimestamp(System.currentTimeMillis());
+    @Autowired
+    private CardValidationService cardValidationService;
+    
+    @Autowired
+    private AuditService auditService;
+    
+    @Autowired
+    private ReaderRepository readerRepository;
+    
+    // Store pending audits for door open/close events
+    private final Map<String, Long> pendingAudits = new ConcurrentHashMap<>();
+    
+    @PostMapping("/database-command")
+    @Operation(summary = "Process database command", description = "Accepts database commands (INSERT, UPDATE, DELETE, SYNC) and applies them", security = @SecurityRequirement(name = "basicAuth"))
+    public ResponseEntity<CommandAcknowledgement> processDatabaseCommand(
+            @RequestBody DatabaseCommand command) {
         
-        try {
-            int affectedRows = 0;
-            
-            switch (command.getCommandType().toUpperCase()) {
-                case "INSERT":
-                    affectedRows = executeInsert(command.getTableName(), command.getPayload());
-                    break;
-                case "UPDATE":
-                    affectedRows = executeUpdate(command.getTableName(), command.getPayload());
-                    break;
-                case "DELETE":
-                    affectedRows = executeDelete(command.getTableName(), command.getPayload());
-                    break;
-                case "SYNC":
-                case "SYNC_RESPONSE":
-                    // Handle sync commands if needed
-                    ack.setStatus("applied");
-                    ack.setReason("Sync command processed");
-                    ack.setAffectedRows(0);
-                    return ack;
-                default:
-                    throw new IllegalArgumentException("Unknown command type: " + command.getCommandType());
-            }
-            
-            ack.setStatus("applied");
-            ack.setReason("Command executed successfully");
-            ack.setAffectedRows(affectedRows);
-            
-        } catch (Exception e) {
-            ack.setStatus("failed");
-            ack.setReason("Error: " + e.getMessage());
-            ack.setAffectedRows(0);
-        }
-        
-        return ack;
+        CommandAcknowledgement ack = databaseCommandService.processCommand(command);
+        return ResponseEntity.ok(ack);
     }
     
-    private int executeInsert(String tableName, Map<String, Object> payload) {
-        StringBuilder sql = new StringBuilder("INSERT INTO ");
-        sql.append(tableName).append(" (");
+    @PostMapping("/command-ack")
+    @Operation(summary = "Receive command acknowledgement", description = "Accepts command acknowledgements from controllers", security = @SecurityRequirement(name = "basicAuth"))
+    public ResponseEntity<Map<String, String>> receiveCommandAck(
+            @RequestBody CommandAcknowledgement ack) {
         
-        StringBuilder values = new StringBuilder(" VALUES (");
-        boolean first = true;
+        Map<String, String> response = new HashMap<>();
+        response.put("status", "received");
+        response.put("command_id", ack.getCommandId());
+        response.put("timestamp", String.valueOf(System.currentTimeMillis()));
         
-        for (Map.Entry<String, Object> entry : payload.entrySet()) {
-            if (!first) {
-                sql.append(", ");
-                values.append(", ");
-            }
-            sql.append(entry.getKey());
-            values.append("?");
-            first = false;
-        }
-        
-        sql.append(")").append(values).append(")");
-        
-        Object[] params = payload.values().toArray();
-        return jdbcTemplate.update(sql.toString(), params);
+        return ResponseEntity.ok(response);
     }
     
-    private int executeUpdate(String tableName, Map<String, Object> payload) {
-        // Extract ID field (assuming first field or a specific pattern)
-        String idField = tableName.substring(0, tableName.length() - 1) + "_id"; // e.g., "access_card" -> "card_id"
-        if (!payload.containsKey(idField)) {
-            // Try common ID patterns
-            if (payload.containsKey("id")) {
-                idField = "id";
+    @PostMapping("/event-log")
+    @Operation(summary = "Process event log", description = "Processes card scans and system events for real-time access validation", security = @SecurityRequirement(name = "basicAuth"))
+    public ResponseEntity<EventLogResponse> processEventLog(@RequestBody EventLog eventLog) {
+        
+        EventLogResponse response = new EventLogResponse();
+        response.setEventId(eventLog.getEventId());
+        response.setTimestamp(System.currentTimeMillis());
+        
+        LocalDateTime eventTime = LocalDateTime.ofInstant(
+            Instant.ofEpochMilli(eventLog.getTimestamp()), ZoneOffset.UTC);
+        
+        if ("card_scan".equals(eventLog.getEventType())) {
+            // Validate card access
+            CardValidationService.CardValidationResult validation = 
+                cardValidationService.validateCardAccess(eventLog.getCardHex(), eventLog.getDoorId());
+            
+            // Find reader for this door
+            Long readerId = readerRepository.findByDoorIdAndIsActiveTrue(eventLog.getDoorId())
+                .map(r -> r.getReaderId())
+                .orElse(null);
+            
+            if (validation.isGranted()) {
+                // Create audit entry for card scan
+                Audit audit = auditService.createCardScanAudit(
+                    validation.getCompanyId(),
+                    validation.getEmployeePk(),
+                    validation.getCardId(),
+                    eventLog.getDoorId(),
+                    readerId,
+                    eventTime,
+                    true,
+                    validation.getReason()
+                );
+                
+                // Store audit ID for subsequent door open/close events
+                String key = eventLog.getCardHex() + "_" + eventLog.getDoorId() + "_" + eventLog.getTimestamp();
+                pendingAudits.put(key, audit.getAuditId());
+                
+                response.setEventType("access_granted");
+                response.setDoorType(validation.getDoorType());
+                response.setMessage("Access granted");
+                
             } else {
-                throw new IllegalArgumentException("ID field not found in payload for UPDATE");
+                // Create audit entry for denied access
+                auditService.createCardScanAudit(
+                    eventLog.getCompanyId(),
+                    null,
+                    null,
+                    eventLog.getDoorId(),
+                    readerId,
+                    eventTime,
+                    false,
+                    validation.getReason()
+                );
+                
+                response.setEventType("access_denied");
+                response.setDoorType(null);
+                response.setMessage(validation.getReason());
             }
-        }
-        
-        Object idValue = payload.remove(idField);
-        
-        StringBuilder sql = new StringBuilder("UPDATE ");
-        sql.append(tableName).append(" SET ");
-        
-        boolean first = true;
-        for (String key : payload.keySet()) {
-            if (!first) {
-                sql.append(", ");
+            
+        } else if ("system_event".equals(eventLog.getEventType())) {
+            // Handle door open/close events
+            String details = eventLog.getDetails() != null ? eventLog.getDetails().toLowerCase() : "";
+            
+            // Find the most recent audit for this card/door combination
+            Audit latestAudit = null;
+            if (eventLog.getCardHex() != null && eventLog.getDoorId() != null) {
+                // Try to find by card
+                var cardOpt = cardValidationService.findCardByUid(eventLog.getCardHex());
+                if (cardOpt.isPresent()) {
+                    latestAudit = auditService.findLatestAuditByCardAndDoor(
+                        cardOpt.get().getCardId(), eventLog.getDoorId());
+                }
             }
-            sql.append(key).append(" = ?");
-            first = false;
+            
+            if (latestAudit != null) {
+                if (details.contains("open") || details.contains("opened")) {
+                    auditService.updateAuditWithDoorOpen(latestAudit.getAuditId(), eventTime);
+                } else if (details.contains("close") || details.contains("closed")) {
+                    auditService.updateAuditWithDoorClose(latestAudit.getAuditId(), eventTime);
+                }
+            }
+            
+            response.setEventType("system_event");
+            response.setMessage("System event processed");
+            
+        } else if ("access_granted".equals(eventLog.getEventType()) || 
+                   "access_denied".equals(eventLog.getEventType())) {
+            // Acknowledge access responses
+            response.setEventType(eventLog.getEventType());
+            response.setMessage("Event acknowledged");
         }
         
-        sql.append(" WHERE ").append(idField).append(" = ?");
-        
-        Object[] params = new Object[payload.size() + 1];
-        int i = 0;
-        for (Object value : payload.values()) {
-            params[i++] = value;
-        }
-        params[i] = idValue;
-        
-        return jdbcTemplate.update(sql.toString(), params);
+        return ResponseEntity.ok(response);
     }
     
-    private int executeDelete(String tableName, Map<String, Object> payload) {
-        // Extract ID field
-        String idField = tableName.substring(0, tableName.length() - 1) + "_id";
-        if (!payload.containsKey(idField)) {
-            if (payload.containsKey("id")) {
-                idField = "id";
-            } else {
-                throw new IllegalArgumentException("ID field not found in payload for DELETE");
-            }
-        }
+    @PostMapping("/server-heartbeat")
+    @Operation(summary = "Receive server heartbeat", description = "Accepts heartbeat messages from controllers", security = @SecurityRequirement(name = "basicAuth"))
+    public ResponseEntity<ServerHeartbeatResponse> receiveHeartbeat(
+            @RequestBody ServerHeartbeat heartbeat) {
         
-        Object idValue = payload.get(idField);
-        String sql = "DELETE FROM " + tableName + " WHERE " + idField + " = ?";
+        ServerHeartbeatResponse response = new ServerHeartbeatResponse();
+        response.setDeviceId(heartbeat.getDeviceId());
+        response.setTimestampReceived(System.currentTimeMillis());
+        response.setServerStatus("online");
+        response.setServerTimestamp(System.currentTimeMillis());
         
-        return jdbcTemplate.update(sql, idValue);
+        return ResponseEntity.ok(response);
     }
 }
