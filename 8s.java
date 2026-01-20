@@ -1,11 +1,14 @@
-package com.company.badgemate.repository;
+package com.company.badgemate.dto;
 
-import com.company.badgemate.entity.Reader;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
-import java.util.Optional;
+import lombok.Data;
+import java.util.Map;
 
-@Repository
-public interface ReaderRepository extends JpaRepository<Reader, Long> {
-    Optional<Reader> findByDoorIdAndIsActiveTrue(Long doorId);
+@Data
+public class DatabaseCommand {
+    private String commandId;
+    private String commandType; // INSERT, UPDATE, DELETE, SYNC, SYNC_RESPONSE
+    private String tableName;
+    private Map<String, Object> payload;
+    private Long timestamp;
+    private Integer retryCount;
 }
