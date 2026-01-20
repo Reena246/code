@@ -1,151 +1,88 @@
 package com.project.accesscontrol.service;
 
-import com.project.accesscontrol.entity.*;
-import com.project.accesscontrol.repository.*;
+import com.project.accesscontrol.entity.Audit;
+import com.project.accesscontrol.repository.AuditRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Optional;
 
 @Service
-public class CardValidationService {
+public class AuditService {
     
     @Autowired
-    private AccessCardRepository accessCardRepository;
+    private AuditRepository auditRepository;
     
-    @Autowired
-    private EmployeeRepository employeeRepository;
-    
-    @Autowired
-    private AccessGroupDoorRepository accessGroupDoorRepository;
-    
-    @Autowired
-    private DoorRepository doorRepository;
-    
-    public CardValidationResult validateCardAccess(String cardHex, Long doorId) {
-        CardValidationResult result = new CardValidationResult();
+    @Transactional
+    public Audit createCardScanAudit(Long companyId, Long employeePk, Long cardId, Long doorId, 
+                                     Long readerId, LocalDateTime eventTime, boolean granted, String reason) {
+        Audit audit = new Audit();
+        audit.setCompanyId(companyId);
+        audit.setEmployeePk(employeePk);
+        audit.setCardId(cardId);
+        audit.setDoorId(doorId);
+        audit.setReaderId(readerId);
+        audit.setEventTime(eventTime);
+        audit.setResult(granted ? Audit.Result.SUCCESS : Audit.Result.DENIED);
+        audit.setReason(reason);
+        audit.setIsActive(true);
+        audit.setCreated(LocalDateTime.now());
+        audit.setUpdated(LocalDateTime.now());
+        audit.setCreatedBy("SYSTEM");
+        audit.setUpdatedBy("SYSTEM");
         
-        // Find card by card_uid (cardHex)
-        Optional<AccessCard> cardOpt = accessCardRepository.findByCardUidAndIsActiveTrue(cardHex);
-        if (cardOpt.isEmpty()) {
-            result.setGranted(false);
-            result.setReason("Card not found or inactive");
-            return result;
-        }
-        
-        AccessCard card = cardOpt.get();
-        
-        // Check if card is expired
-        if (card.getExpiresAt() != null && card.getExpiresAt().isBefore(LocalDateTime.now())) {
-            result.setGranted(false);
-            result.setReason("Card expired");
-            return result;
-        }
-        
-        // Check if card is not yet issued
-        if (card.getIssuedAt() != null && card.getIssuedAt().isAfter(LocalDateTime.now())) {
-            result.setGranted(false);
-            result.setReason("Card not yet issued");
-            return result;
-        }
-        
-        // Get employee
-        Optional<Employee> employeeOpt = employeeRepository.findByEmployeePkAndIsActiveTrue(card.getEmployeePk());
-        if (employeeOpt.isEmpty()) {
-            result.setGranted(false);
-            result.setReason("Employee not found or inactive");
-            return result;
-        }
-        
-        Employee employee = employeeOpt.get();
-        
-        // Get door
-        Optional<Door> doorOpt = doorRepository.findByDoorIdAndIsActiveTrue(doorId);
-        if (doorOpt.isEmpty()) {
-            result.setGranted(false);
-            result.setReason("Door not found or inactive");
-            return result;
-        }
-        
-        Door door = doorOpt.get();
-        
-        // Check access group permissions
-        if (employee.getAccessGroupId() != null) {
-            List<AccessGroupDoor> accessGroupDoors = accessGroupDoorRepository
-                    .findByIdAccessGroupIdAndIdDoorIdAndIsActiveTrue(employee.getAccessGroupId(), doorId);
-            
-            boolean hasAllowAccess = false;
-            boolean hasDenyAccess = false;
-            
-            for (AccessGroupDoor agd : accessGroupDoors) {
-                if (AccessGroupDoor.AccessType.ALLOW.equals(agd.getAccessType())) {
-                    hasAllowAccess = true;
-                } else if (AccessGroupDoor.AccessType.DENY.equals(agd.getAccessType())) {
-                    hasDenyAccess = true;
-                }
-            }
-            
-            // DENY takes precedence
-            if (hasDenyAccess) {
-                result.setGranted(false);
-                result.setReason("Access denied by access group");
-                return result;
-            }
-            
-            // Check if ALLOW exists
-            if (!hasAllowAccess) {
-                result.setGranted(false);
-                result.setReason("No access permission for this door");
-                return result;
-            }
-        } else {
-            result.setGranted(false);
-            result.setReason("Employee has no access group assigned");
-            return result;
-        }
-        
-        // All checks passed
-        result.setGranted(true);
-        result.setCardId(card.getCardId());
-        result.setEmployeePk(employee.getEmployeePk());
-        result.setCompanyId(employee.getCompanyId());
-        result.setDoorType(door.getLockType().name());
-        result.setReason("Access granted");
-        
-        return result;
+        return auditRepository.save(audit);
     }
     
-    public Optional<AccessCard> findCardByUid(String cardUid) {
-        return accessCardRepository.findByCardUidAndIsActiveTrue(cardUid);
+    @Transactional
+    public Audit updateAuditWithDoorOpen(Long auditId, LocalDateTime openedAt) {
+        Optional<Audit> auditOpt = auditRepository.findById(auditId);
+        if (auditOpt.isEmpty()) {
+            return null;
+        }
+        
+        Audit audit = auditOpt.get();
+        audit.setOpenedAt(openedAt);
+        audit.setUpdated(LocalDateTime.now());
+        audit.setUpdatedBy("SYSTEM");
+        
+        return auditRepository.save(audit);
     }
     
-    public static class CardValidationResult {
-        private boolean granted;
-        private String reason;
-        private Long cardId;
-        private Long employeePk;
-        private Long companyId;
-        private String doorType;
+    @Transactional
+    public Audit updateAuditWithDoorClose(Long auditId, LocalDateTime closedAt) {
+        Optional<Audit> auditOpt = auditRepository.findById(auditId);
+        if (auditOpt.isEmpty()) {
+            return null;
+        }
         
-        // Getters and setters
-        public boolean isGranted() { return granted; }
-        public void setGranted(boolean granted) { this.granted = granted; }
+        Audit audit = auditOpt.get();
+        audit.setClosedAt(closedAt);
         
-        public String getReason() { return reason; }
-        public void setReason(String reason) { this.reason = reason; }
+        // Calculate open_seconds if opened_at exists
+        if (audit.getOpenedAt() != null && closedAt != null) {
+            long seconds = java.time.Duration.between(audit.getOpenedAt(), closedAt).getSeconds();
+            audit.setOpenSeconds((int) seconds);
+            
+            // Calculate average open seconds for this door
+            Double avgSeconds = auditRepository.findAverageOpenSecondsByDoorId(audit.getDoorId());
+            if (avgSeconds != null) {
+                audit.setAvgOpenSeconds(BigDecimal.valueOf(avgSeconds).setScale(2, RoundingMode.HALF_UP));
+            }
+        }
         
-        public Long getCardId() { return cardId; }
-        public void setCardId(Long cardId) { this.cardId = cardId; }
+        audit.setUpdated(LocalDateTime.now());
+        audit.setUpdatedBy("SYSTEM");
         
-        public Long getEmployeePk() { return employeePk; }
-        public void setEmployeePk(Long employeePk) { this.employeePk = employeePk; }
-        
-        public Long getCompanyId() { return companyId; }
-        public void setCompanyId(Long companyId) { this.companyId = companyId; }
-        
-        public String getDoorType() { return doorType; }
-        public void setDoorType(String doorType) { this.doorType = doorType; }
+        return auditRepository.save(audit);
+    }
+    
+    public Audit findLatestAuditByCardAndDoor(Long cardId, Long doorId) {
+        var audits = auditRepository.findByCardIdAndDoorIdOrderByEventTimeDesc(cardId, doorId);
+        return audits.isEmpty() ? null : audits.get(0);
     }
 }
