@@ -1,88 +1,138 @@
 package com.project.accesscontrol.service;
 
-import com.project.accesscontrol.entity.Audit;
-import com.project.accesscontrol.repository.AuditRepository;
+import com.project.accesscontrol.dto.DatabaseCommand;
+import com.project.accesscontrol.dto.CommandAcknowledgement;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.time.LocalDateTime;
-import java.util.Optional;
+import java.util.Map;
 
 @Service
-public class AuditService {
+public class DatabaseCommandService {
     
     @Autowired
-    private AuditRepository auditRepository;
+    private JdbcTemplate jdbcTemplate;
     
     @Transactional
-    public Audit createCardScanAudit(Long companyId, Long employeePk, Long cardId, Long doorId, 
-                                     Long readerId, LocalDateTime eventTime, boolean granted, String reason) {
-        Audit audit = new Audit();
-        audit.setCompanyId(companyId);
-        audit.setEmployeePk(employeePk);
-        audit.setCardId(cardId);
-        audit.setDoorId(doorId);
-        audit.setReaderId(readerId);
-        audit.setEventTime(eventTime);
-        audit.setResult(granted ? Audit.Result.SUCCESS : Audit.Result.DENIED);
-        audit.setReason(reason);
-        audit.setIsActive(true);
-        audit.setCreated(LocalDateTime.now());
-        audit.setUpdated(LocalDateTime.now());
-        audit.setCreatedBy("SYSTEM");
-        audit.setUpdatedBy("SYSTEM");
+    public CommandAcknowledgement processCommand(DatabaseCommand command) {
+        CommandAcknowledgement ack = new CommandAcknowledgement();
+        ack.setCommandId(command.getCommandId());
+        ack.setTimestamp(System.currentTimeMillis());
         
-        return auditRepository.save(audit);
-    }
-    
-    @Transactional
-    public Audit updateAuditWithDoorOpen(Long auditId, LocalDateTime openedAt) {
-        Optional<Audit> auditOpt = auditRepository.findById(auditId);
-        if (auditOpt.isEmpty()) {
-            return null;
-        }
-        
-        Audit audit = auditOpt.get();
-        audit.setOpenedAt(openedAt);
-        audit.setUpdated(LocalDateTime.now());
-        audit.setUpdatedBy("SYSTEM");
-        
-        return auditRepository.save(audit);
-    }
-    
-    @Transactional
-    public Audit updateAuditWithDoorClose(Long auditId, LocalDateTime closedAt) {
-        Optional<Audit> auditOpt = auditRepository.findById(auditId);
-        if (auditOpt.isEmpty()) {
-            return null;
-        }
-        
-        Audit audit = auditOpt.get();
-        audit.setClosedAt(closedAt);
-        
-        // Calculate open_seconds if opened_at exists
-        if (audit.getOpenedAt() != null && closedAt != null) {
-            long seconds = java.time.Duration.between(audit.getOpenedAt(), closedAt).getSeconds();
-            audit.setOpenSeconds((int) seconds);
+        try {
+            int affectedRows = 0;
             
-            // Calculate average open seconds for this door
-            Double avgSeconds = auditRepository.findAverageOpenSecondsByDoorId(audit.getDoorId());
-            if (avgSeconds != null) {
-                audit.setAvgOpenSeconds(BigDecimal.valueOf(avgSeconds).setScale(2, RoundingMode.HALF_UP));
+            switch (command.getCommandType().toUpperCase()) {
+                case "INSERT":
+                    affectedRows = executeInsert(command.getTableName(), command.getPayload());
+                    break;
+                case "UPDATE":
+                    affectedRows = executeUpdate(command.getTableName(), command.getPayload());
+                    break;
+                case "DELETE":
+                    affectedRows = executeDelete(command.getTableName(), command.getPayload());
+                    break;
+                case "SYNC":
+                case "SYNC_RESPONSE":
+                    // Handle sync commands if needed
+                    ack.setStatus("applied");
+                    ack.setReason("Sync command processed");
+                    ack.setAffectedRows(0);
+                    return ack;
+                default:
+                    throw new IllegalArgumentException("Unknown command type: " + command.getCommandType());
+            }
+            
+            ack.setStatus("applied");
+            ack.setReason("Command executed successfully");
+            ack.setAffectedRows(affectedRows);
+            
+        } catch (Exception e) {
+            ack.setStatus("failed");
+            ack.setReason("Error: " + e.getMessage());
+            ack.setAffectedRows(0);
+        }
+        
+        return ack;
+    }
+    
+    private int executeInsert(String tableName, Map<String, Object> payload) {
+        StringBuilder sql = new StringBuilder("INSERT INTO ");
+        sql.append(tableName).append(" (");
+        
+        StringBuilder values = new StringBuilder(" VALUES (");
+        boolean first = true;
+        
+        for (Map.Entry<String, Object> entry : payload.entrySet()) {
+            if (!first) {
+                sql.append(", ");
+                values.append(", ");
+            }
+            sql.append(entry.getKey());
+            values.append("?");
+            first = false;
+        }
+        
+        sql.append(")").append(values).append(")");
+        
+        Object[] params = payload.values().toArray();
+        return jdbcTemplate.update(sql.toString(), params);
+    }
+    
+    private int executeUpdate(String tableName, Map<String, Object> payload) {
+        // Extract ID field (assuming first field or a specific pattern)
+        String idField = tableName.substring(0, tableName.length() - 1) + "_id"; // e.g., "access_card" -> "card_id"
+        if (!payload.containsKey(idField)) {
+            // Try common ID patterns
+            if (payload.containsKey("id")) {
+                idField = "id";
+            } else {
+                throw new IllegalArgumentException("ID field not found in payload for UPDATE");
             }
         }
         
-        audit.setUpdated(LocalDateTime.now());
-        audit.setUpdatedBy("SYSTEM");
+        Object idValue = payload.remove(idField);
         
-        return auditRepository.save(audit);
+        StringBuilder sql = new StringBuilder("UPDATE ");
+        sql.append(tableName).append(" SET ");
+        
+        boolean first = true;
+        for (String key : payload.keySet()) {
+            if (!first) {
+                sql.append(", ");
+            }
+            sql.append(key).append(" = ?");
+            first = false;
+        }
+        
+        sql.append(" WHERE ").append(idField).append(" = ?");
+        
+        Object[] params = new Object[payload.size() + 1];
+        int i = 0;
+        for (Object value : payload.values()) {
+            params[i++] = value;
+        }
+        params[i] = idValue;
+        
+        return jdbcTemplate.update(sql.toString(), params);
     }
     
-    public Audit findLatestAuditByCardAndDoor(Long cardId, Long doorId) {
-        var audits = auditRepository.findByCardIdAndDoorIdOrderByEventTimeDesc(cardId, doorId);
-        return audits.isEmpty() ? null : audits.get(0);
+    private int executeDelete(String tableName, Map<String, Object> payload) {
+        // Extract ID field
+        String idField = tableName.substring(0, tableName.length() - 1) + "_id";
+        if (!payload.containsKey(idField)) {
+            if (payload.containsKey("id")) {
+                idField = "id";
+            } else {
+                throw new IllegalArgumentException("ID field not found in payload for DELETE");
+            }
+        }
+        
+        Object idValue = payload.get(idField);
+        String sql = "DELETE FROM " + tableName + " WHERE " + idField + " = ?";
+        
+        return jdbcTemplate.update(sql, idValue);
     }
 }
