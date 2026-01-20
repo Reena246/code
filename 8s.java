@@ -3,11 +3,10 @@ package com.company.badgemate.dto;
 import lombok.Data;
 
 @Data
-public class ServerHeartbeat {
-    private String deviceId;
+public class EventLogResponse {
+    private String eventId;
+    private String eventType; // access_granted, access_denied
+    private String doorType; // MAGNETIC, STRIKE
     private Long timestamp;
-    private Boolean isOnline;
-    private Integer queueSize;
-    private String dbVersionHash;
-    private Integer uptimeSeconds;
+    private String message;
 }
