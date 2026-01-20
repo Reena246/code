@@ -1,14 +1,12 @@
 package com.company.badgemate.dto;
 
 import lombok.Data;
-import java.util.Map;
 
 @Data
-public class DatabaseCommand {
+public class CommandAcknowledgement {
     private String commandId;
-    private String commandType; // INSERT, UPDATE, DELETE, SYNC, SYNC_RESPONSE
-    private String tableName;
-    private Map<String, Object> payload;
+    private String status; // applied, failed, pending
+    private String reason;
     private Long timestamp;
-    private Integer retryCount;
+    private Integer affectedRows;
 }
