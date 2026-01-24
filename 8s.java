@@ -1,167 +1,80 @@
-package com.project.accesscontrol.controller;
+-- ===============================================
+-- 1️⃣ Controller Table
+-- ===============================================
+CREATE TABLE IF NOT EXISTS controller (
+    controller_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    controller_mac VARCHAR(50) NOT NULL UNIQUE,
+    company_id BIGINT NOT NULL,
+    site_id BIGINT NOT NULL,
+    building_id BIGINT,  -- optional
+    status ENUM('REGISTERED','ACTIVE','DISABLED') DEFAULT 'REGISTERED',
+    created DATETIME DEFAULT NOW(),
+    updated DATETIME DEFAULT NOW(),
+    CONSTRAINT fk_controller_company FOREIGN KEY (company_id) REFERENCES company(company_id),
+    CONSTRAINT fk_controller_site FOREIGN KEY (site_id) REFERENCES site(site_id),
+    CONSTRAINT fk_controller_building FOREIGN KEY (building_id) REFERENCES building(building_id)
+);
 
-import com.project.accesscontrol.dto.*;
-import com.project.accesscontrol.entity.Audit;
-import com.project.accesscontrol.repository.ReaderRepository;
-import com.project.accesscontrol.service.AuditService;
-import com.project.accesscontrol.service.CardValidationService;
-import com.project.accesscontrol.service.DatabaseCommandService;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.security.SecurityRequirement;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+-- ===============================================
+-- 2️⃣ Alter Reader Table
+-- ===============================================
+ALTER TABLE reader
+ADD COLUMN controller_id BIGINT NOT NULL AFTER reader_id,
+ADD COLUMN reader_uuid VARCHAR(64) UNIQUE NOT NULL AFTER controller_id,
+ADD CONSTRAINT fk_reader_controller FOREIGN KEY (controller_id) REFERENCES controller(controller_id);
 
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+-- ===============================================
+-- 3️⃣ Alter Audit Table
+-- Needed for backend API logging
+-- ===============================================
+ALTER TABLE audit
+ADD COLUMN controller_mac VARCHAR(50) AFTER reader_id,
+ADD COLUMN request_received_at DATETIME AFTER event_time,
+ADD COLUMN request_processed_at DATETIME AFTER request_received_at,
+ADD COLUMN response_sent_at DATETIME AFTER request_processed_at,
+ADD COLUMN controller_received_at DATETIME AFTER response_sent_at;
 
-@RestController
-@RequestMapping("/api")
-@Tag(name = "Access Control API", description = "API endpoints for access control system")
-public class ApiController {
+-- Minimal foreign keys to ensure integrity
+ALTER TABLE audit
+ADD CONSTRAINT fk_audit_reader FOREIGN KEY (reader_id) REFERENCES reader(reader_id),
+ADD CONSTRAINT fk_audit_card FOREIGN KEY (card_id) REFERENCES access_card(card_id),
+ADD CONSTRAINT fk_audit_door FOREIGN KEY (door_id) REFERENCES door(door_id);
 
-    @Autowired
-    private DatabaseCommandService databaseCommandService;
+-- ===============================================
+-- 4️⃣ Optional DB Sync Table (needed for dbsync API)
+-- ===============================================
+CREATE TABLE IF NOT EXISTS db_sync_log (
+    sync_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    controller_id BIGINT NOT NULL,
+    sync_type ENUM('FULL','DELTA') NOT NULL,
+    sync_timestamp DATETIME DEFAULT NOW(),
+    rows_sent INT,
+    CONSTRAINT fk_dbsync_controller FOREIGN KEY (controller_id) REFERENCES controller(controller_id)
+);
 
-    @Autowired
-    private CardValidationService cardValidationService;
+-- ===============================================
+-- 5️⃣ Sample Data for Testing APIs
+-- ===============================================
 
-    @Autowired
-    private AuditService auditService;
+-- Sample Controller
+INSERT INTO controller (controller_mac, company_id, site_id, building_id, status, created, updated)
+VALUES ('AA:BB:CC:DD:EE:FF', 1, 1, 1, 'REGISTERED', NOW(), NOW());
 
-    @Autowired
-    private ReaderRepository readerRepository;
+-- Sample Readers
+INSERT INTO reader (door_id, controller_id, reader_uuid, reader_code, is_active, created, updated)
+VALUES 
+(1, 1, 'UUID-READER-001', 'READER-1', 1, NOW(), NOW()),
+(2, 1, 'UUID-READER-002', 'READER-2', 1, NOW(), NOW());
 
-    // Map to track pending audits for door open/close events
-    private final Map<String, Long> pendingAudits = new ConcurrentHashMap<>();
+-- Sample Access Card
+INSERT INTO access_card (company_id, provider_id, employee_pk, card_uid, card_number, issued_at, expires_at, is_active, created, updated, created_by, updated_by)
+VALUES 
+(1, 1, 1, 'CARD-HEX-001', '123456', NOW(), DATE_ADD(NOW(), INTERVAL 2 YEAR), 1, NOW(), NOW(), 'admin', 'admin');
 
-    @PostMapping("/database-command")
-    @Operation(summary = "Process database command", security = @SecurityRequirement(name = "basicAuth"))
-    public ResponseEntity<CommandAcknowledgement> processDatabaseCommand(
-            @RequestBody DatabaseCommand command) {
-        CommandAcknowledgement ack = databaseCommandService.processCommand(command);
-        return ResponseEntity.ok(ack);
-    }
+-- Sample Access Group
+INSERT INTO access_group (company_id, group_name, description, is_active, created, updated, created_by, updated_by)
+VALUES (1, 'Employee Access', 'Access to general doors', 1, NOW(), NOW(), 'admin', 'admin');
 
-    @PostMapping("/command-ack")
-    @Operation(summary = "Receive command acknowledgement", security = @SecurityRequirement(name = "basicAuth"))
-    public ResponseEntity<Map<String, String>> receiveCommandAck(
-            @RequestBody CommandAcknowledgement ack) {
-        Map<String, String> response = new HashMap<>();
-        response.put("status", "received");
-        response.put("command_id", ack.getCommandId());
-        response.put("timestamp", String.valueOf(System.currentTimeMillis()));
-        return ResponseEntity.ok(response);
-    }
-
-    @PostMapping("/event-log")
-    @Operation(summary = "Process event log", security = @SecurityRequirement(name = "basicAuth"))
-    public ResponseEntity<EventLogResponse> processEventLog(@RequestBody EventLog eventLog) {
-
-        EventLogResponse response = new EventLogResponse();
-        response.setEventId(eventLog.getEventId());
-        response.setTimestamp(System.currentTimeMillis());
-
-        // Use controller timestamp if present, else fallback to now
-        LocalDateTime eventTime = eventLog.getTimestamp() != null
-                ? LocalDateTime.ofInstant(Instant.ofEpochMilli(eventLog.getTimestamp()), ZoneOffset.UTC)
-                : LocalDateTime.now();
-
-        String key = eventLog.getCardHex() + "_" + eventLog.getDoorId(); // Track audits by card+door
-
-        switch (eventLog.getEventType()) {
-            case "card_scan":
-                // Validate card access
-                CardValidationService.CardValidationResult validation =
-                        cardValidationService.validateCardAccess(eventLog.getCardHex(), eventLog.getDoorId());
-
-                Long readerId = readerRepository.findByDoorIdAndIsActiveTrue(eventLog.getDoorId())
-                        .map(r -> r.getReaderId()).orElse(null);
-
-                if (validation.isGranted()) {
-                    Audit audit = auditService.createCardScanAudit(
-                            validation.getCompanyId(),
-                            validation.getEmployeePk(),
-                            validation.getCardId(),
-                            eventLog.getDoorId(),
-                            readerId,
-                            eventTime,
-                            true,
-                            validation.getReason()
-                    );
-
-                    // Store audit ID for subsequent open/close events
-                    pendingAudits.put(key, audit.getAuditId());
-
-                    response.setEventType("access_granted");
-                    response.setDoorType(validation.getDoorType());
-                    response.setMessage("Access granted");
-                } else {
-                    auditService.createCardScanAudit(
-                            eventLog.getCompanyId(),
-                            null,
-                            null,
-                            eventLog.getDoorId(),
-                            readerId,
-                            eventTime,
-                            false,
-                            validation.getReason()
-                    );
-
-                    response.setEventType("access_denied");
-                    response.setDoorType(null);
-                    response.setMessage(validation.getReason());
-                }
-                break;
-
-            case "system_event":
-                Long auditId = pendingAudits.get(key);
-                if (auditId != null) {
-                    String details = eventLog.getDetails() != null ? eventLog.getDetails().toLowerCase() : "";
-                    if (details.contains("open") || details.contains("opened")) {
-                        auditService.updateAuditWithDoorOpen(auditId, eventTime);
-                        response.setMessage("Door open logged");
-                    } else if (details.contains("close") || details.contains("closed")) {
-                        auditService.updateAuditWithDoorClose(auditId, eventTime);
-                        response.setMessage("Door close logged");
-                        // Remove from pending audits after door is closed
-                        pendingAudits.remove(key);
-                    }
-                    response.setEventType("system_event");
-                } else {
-                    response.setEventType("system_event");
-                    response.setMessage("No pending audit found for this card and door");
-                }
-                break;
-
-            case "access_granted":
-            case "access_denied":
-                // Controller acknowledging access response
-                response.setEventType(eventLog.getEventType());
-                response.setMessage("Event acknowledged");
-                break;
-
-            default:
-                response.setEventType("unknown");
-                response.setMessage("Unknown event type");
-        }
-
-        return ResponseEntity.ok(response);
-    }
-
-    @PostMapping("/server-heartbeat")
-    @Operation(summary = "Receive server heartbeat", security = @SecurityRequirement(name = "basicAuth"))
-    public ResponseEntity<ServerHeartbeatResponse> receiveHeartbeat(@RequestBody ServerHeartbeat heartbeat) {
-        ServerHeartbeatResponse response = new ServerHeartbeatResponse();
-        response.setDeviceId(heartbeat.getDeviceId());
-        response.setTimestampReceived(System.currentTimeMillis());
-        response.setServerStatus("online");
-        response.setServerTimestamp(System.currentTimeMillis());
-        return ResponseEntity.ok(response);
-    }
-}
+-- Map Access Group to Door
+INSERT INTO access_group_door (access_group_id, door_id, access_type, is_active, created, updated, created_by, updated_by)
+VALUES (1, 1, 'ALLOW', 1, NOW(), NOW(), 'admin', 'admin');
