@@ -10,7 +10,15 @@ INSERT INTO reader (
     updated_by,
     reader_uuid
 )
-VALUES
-(1, 1, 'ITSR-DOOR-1', 'HID-RP40', 1, NOW(), NOW(), 'system', 'system', UUID()),
-(1, 2, 'ITSR-DOOR-2', 'HID-RP40', 1, NOW(), NOW(), 'system', 'system', UUID());
-
+VALUES (
+    1,
+    1,
+    'READER-001',
+    'HID-RP40',
+    1,
+    '2026-01-01 10:00:00',
+    '2026-01-01 10:00:00',
+    'system',
+    'system',
+    'UUID-READER-001'
+);
