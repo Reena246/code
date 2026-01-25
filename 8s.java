@@ -1,24 +1,9 @@
-INSERT INTO reader (
-    controller_id,
-    door_id,
-    reader_code,
-    reader_model,
-    is_active,
-    created,
-    updated,
-    created_by,
-    updated_by,
-    reader_uuid
-)
-VALUES (
-    1,
-    2,  -- 👈 different door
-    'READER-002',
-    'HID-RP40',
-    1,
-    NOW(),
-    NOW(),
-    'system',
-    'system',
-    'UUID-READER-002'
-);
+UPDATE reader
+SET
+    reader_code = 'READER-001',
+    reader_model = 'HID-RP40',
+    updated = NOW(),
+    updated_by = 'system'
+WHERE door_id = 1;
+
+ALTER TABLE reader DROP INDEX reader_door_id;
