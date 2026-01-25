@@ -12,13 +12,13 @@ INSERT INTO reader (
 )
 VALUES (
     1,
-    1,
-    'READER-001',
+    2,  -- 👈 different door
+    'READER-002',
     'HID-RP40',
     1,
-    '2026-01-01 10:00:00',
-    '2026-01-01 10:00:00',
+    NOW(),
+    NOW(),
     'system',
     'system',
-    'UUID-READER-001'
+    'UUID-READER-002'
 );
