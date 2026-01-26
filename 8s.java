@@ -8,34 +8,22 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "site")
+@Table(name = "building")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class Site {
+public class Building {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "site_id")
+    @Column(name = "building_id")
+    private Long buildingId;
+
+    @Column(name = "site_id", nullable = false)
     private Long siteId;
 
-    @Column(name = "company_id", nullable = false)
-    private Long companyId;
-
-    @Column(name = "site_name", nullable = false)
-    private String siteName;
-
-    @Column(name = "address_line1")
-    private String addressLine1;
-
-    @Column(name = "city")
-    private String city;
-
-    @Column(name = "state")
-    private String state;
-
-    @Column(name = "country")
-    private String country;
+    @Column(name = "building_name", nullable = false)
+    private String buildingName;
 
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;
