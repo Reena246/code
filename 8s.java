@@ -1,10 +1,10 @@
 package com.accesscontrol.controller;
 
-import com.accesscontrol.dto.ValidateAccessRequest;
-import com.accesscontrol.dto.ValidateAccessResponse;
+import com.accesscontrol.dto.DoorEventRequest;
+import com.accesscontrol.dto.DoorEventResponse;
 import com.accesscontrol.exception.EncryptionException;
 import com.accesscontrol.security.AesEncryptionUtil;
-import com.accesscontrol.service.AccessControlService;
+import com.accesscontrol.service.DoorEventService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -13,61 +13,54 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDateTime;
-
 /**
- * Controller for real-time access validation
+ * Controller for door events (OPEN, CLOSE, FORCED)
  * All payloads are encrypted with AES-256/CBC/PKCS5Padding
  */
 @RestController
 @RequestMapping("/access")
-@Tag(name = "Access Control", description = "Real-time card validation and access control")
-public class AccessControlController {
+@Tag(name = "Door Events", description = "Handle door state change events")
+public class DoorEventController {
 
-    private static final Logger logger = LoggerFactory.getLogger(AccessControlController.class);
+    private static final Logger logger = LoggerFactory.getLogger(DoorEventController.class);
     private static final String IV_HEADER = "X-IV";
 
-    private final AccessControlService accessControlService;
+    private final DoorEventService doorEventService;
     private final AesEncryptionUtil encryptionUtil;
 
-    public AccessControlController(AccessControlService accessControlService,
-                                   AesEncryptionUtil encryptionUtil) {
-        this.accessControlService = accessControlService;
+    public DoorEventController(DoorEventService doorEventService,
+                              AesEncryptionUtil encryptionUtil) {
+        this.doorEventService = doorEventService;
         this.encryptionUtil = encryptionUtil;
     }
 
-    @PostMapping(value = "/validate", 
+    @PostMapping(value = "/event",
                  consumes = MediaType.APPLICATION_OCTET_STREAM_VALUE,
                  produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
     @Operation(
-        summary = "Validate access card",
-        description = "Real-time validation of access card. Request and response are encrypted with AES-256/CBC. " +
-                     "IV must be provided via X-IV header (Base64 encoded). Same IV is used for response encryption.",
+        summary = "Log door event",
+        description = "Record door state changes (OPEN/CLOSE/FORCED). Request and response are encrypted with AES-256/CBC.",
         parameters = {
             @Parameter(name = "X-IV", description = "Base64-encoded IV for encryption/decryption", required = true)
         },
         requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
-            description = "Encrypted ValidateAccessRequest: {controllerMac, readerUuid, cardHex, timestamp}",
+            description = "Encrypted DoorEventRequest: {controllerMac, readerUuid, eventType, timestamp}",
             content = @Content(mediaType = "application/octet-stream")
         ),
         responses = {
-            @ApiResponse(responseCode = "200", description = "Access validated",
+            @ApiResponse(responseCode = "200", description = "Event recorded",
                 content = @Content(mediaType = "application/octet-stream",
-                    schema = @Schema(description = "Encrypted ValidateAccessResponse: {result, lockType, readerUuid, reason}"))),
-            @ApiResponse(responseCode = "400", description = "Invalid request or encryption error"),
-            @ApiResponse(responseCode = "404", description = "Controller not found")
+                    schema = @Schema(description = "Encrypted DoorEventResponse: {status}"))),
+            @ApiResponse(responseCode = "400", description = "Invalid request or encryption error")
         }
     )
-    public ResponseEntity<byte[]> validateAccess(
+    public ResponseEntity<byte[]> logDoorEvent(
             @RequestHeader(IV_HEADER) String iv,
             @RequestBody byte[] encryptedRequest) {
-
-        LocalDateTime requestReceivedAt = LocalDateTime.now();
 
         try {
             // Validate IV
@@ -76,15 +69,17 @@ public class AccessControlController {
             }
 
             // Decrypt request
-            ValidateAccessRequest request = encryptionUtil.decrypt(
-                    encryptedRequest, iv, ValidateAccessRequest.class);
+            DoorEventRequest request = encryptionUtil.decrypt(
+                    encryptedRequest, iv, DoorEventRequest.class);
 
-            logger.info("Access validation request - controller_mac: {}, reader_uuid: {}",
-                    request.getControllerMac(), request.getReaderUuid());
+            logger.info("Door event request - controller_mac: {}, reader_uuid: {}, event_type: {}",
+                    request.getControllerMac(), request.getReaderUuid(), request.getEventType());
 
-            // Process validation
-            ValidateAccessResponse response = accessControlService.validateAccess(
-                    request, requestReceivedAt);
+            // Process event
+            doorEventService.processDoorEvent(request);
+
+            // Create response
+            DoorEventResponse response = new DoorEventResponse("OK");
 
             // Encrypt response with SAME IV
             byte[] encryptedResponse = encryptionUtil.encrypt(response, iv);
@@ -97,8 +92,8 @@ public class AccessControlController {
             logger.error("Encryption error: {}", e.getMessage());
             throw e;
         } catch (Exception e) {
-            logger.error("Validation error: {}", e.getMessage(), e);
-            throw new RuntimeException("Validation failed: " + e.getMessage(), e);
+            logger.error("Door event error: {}", e.getMessage(), e);
+            throw new RuntimeException("Door event processing failed: " + e.getMessage(), e);
         }
     }
 }
