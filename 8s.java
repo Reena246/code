@@ -7,7 +7,6 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class BulkEventLogsResponse {
-    private String status;  // RECEIVED
-    private Integer processedCount;
+public class PingRequest {
+    private String controllerMac;
 }
