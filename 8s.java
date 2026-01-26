@@ -7,9 +7,9 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class ValidateAccessResponse {
-    private String result;  // SUCCESS or DENIED
-    private String lockType;  // MAGNETIC or STRIKE
+public class DoorEventRequest {
+    private String controllerMac;
     private String readerUuid;
-    private String reason;
+    private String eventType;  // OPEN, CLOSE, FORCED
+    private String timestamp;
 }
