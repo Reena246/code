@@ -7,9 +7,6 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class DoorEventRequest {
-    private String controllerMac;
-    private String readerUuid;
-    private String eventType;  // OPEN, CLOSE, FORCED
-    private String timestamp;
+public class DoorEventResponse {
+    private String status;  // OK
 }
