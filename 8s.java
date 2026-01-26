@@ -5,28 +5,32 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.io.Serializable;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "access_group_door")
+@Table(name = "door")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-@IdClass(AccessGroupDoor.AccessGroupDoorId.class)
-public class AccessGroupDoor {
+public class Door {
 
     @Id
-    @Column(name = "access_group_id")
-    private Long accessGroupId;
-
-    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "door_id")
     private Long doorId;
 
+    @Column(name = "floor_id", nullable = false)
+    private Long floorId;
+
+    @Column(name = "door_code")
+    private String doorCode;
+
+    @Column(name = "door_number")
+    private String doorNumber;
+
     @Enumerated(EnumType.STRING)
-    @Column(name = "access_type", nullable = false)
-    private AccessType accessType;
+    @Column(name = "lock_type")
+    private LockType lockType;
 
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;
@@ -43,16 +47,8 @@ public class AccessGroupDoor {
     @Column(name = "updated_by")
     private String updatedBy;
 
-    public enum AccessType {
-        ALLOW, DENY
-    }
-
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class AccessGroupDoorId implements Serializable {
-        private Long accessGroupId;
-        private Long doorId;
+    public enum LockType {
+        MAGNETIC, STRIKE
     }
 
     @PrePersist
