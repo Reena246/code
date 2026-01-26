@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class PingRequest {
-    private String controllerMac;
+public class PingResponse {
+    private String status;  // OK
+    private String serverTime;
 }
