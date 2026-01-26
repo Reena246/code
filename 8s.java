@@ -1,11 +1,7 @@
 package com.accesscontrol.exception;
 
-public class EncryptionException extends RuntimeException {
-    public EncryptionException(String message) {
+public class ControllerNotFoundException extends RuntimeException {
+    public ControllerNotFoundException(String message) {
         super(message);
-    }
-
-    public EncryptionException(String message, Throwable cause) {
-        super(message, cause);
     }
 }
