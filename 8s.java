@@ -8,31 +8,68 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "reader")
+@Table(name = "audit")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class Reader {
+public class Audit {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "reader_id")
-    private Long readerId;
+    @Column(name = "audit_id")
+    private Long auditId;
 
-    @Column(name = "controller_id", nullable = false)
-    private Long controllerId;
+    @Column(name = "company_id")
+    private Long companyId;
+
+    @Column(name = "employee_pk")
+    private Long employeePk;
+
+    @Column(name = "card_id")
+    private Long cardId;
 
     @Column(name = "door_id")
     private Long doorId;
 
-    @Column(name = "reader_code")
-    private String readerCode;
+    @Column(name = "reader_id")
+    private Long readerId;
 
-    @Column(name = "reader_model")
-    private String readerModel;
+    @Column(name = "controller_mac")
+    private String controllerMac;
 
-    @Column(name = "reader_uuid", unique = true, nullable = false)
-    private String readerUuid;
+    @Column(name = "event_time")
+    private LocalDateTime eventTime;
+
+    @Column(name = "opened_at")
+    private LocalDateTime openedAt;
+
+    @Column(name = "closed_at")
+    private LocalDateTime closedAt;
+
+    @Column(name = "open_seconds")
+    private Integer openSeconds;
+
+    @Column(name = "avg_open_seconds")
+    private Integer avgOpenSeconds;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "result")
+    private AuditResult result;
+
+    @Column(name = "reason")
+    private String reason;
+
+    @Column(name = "request_received_at")
+    private LocalDateTime requestReceivedAt;
+
+    @Column(name = "processed_at")
+    private LocalDateTime processedAt;
+
+    @Column(name = "response_sent_at")
+    private LocalDateTime responseSentAt;
+
+    @Column(name = "controller_received_at")
+    private LocalDateTime controllerReceivedAt;
 
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;
@@ -43,11 +80,9 @@ public class Reader {
     @Column(name = "updated")
     private LocalDateTime updated;
 
-    @Column(name = "created_by")
-    private String createdBy;
-
-    @Column(name = "updated_by")
-    private String updatedBy;
+    public enum AuditResult {
+        SUCCESS, DENIED
+    }
 
     @PrePersist
     protected void onCreate() {
