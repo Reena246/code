@@ -1,25 +1,22 @@
 package com.accesscontrol.repository;
 
-import com.accesscontrol.entity.AccessCard;
+import com.accesscontrol.entity.AccessGroupDoor;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface AccessCardRepository extends JpaRepository<AccessCard, Long> {
+public interface AccessGroupDoorRepository extends JpaRepository<AccessGroupDoor, AccessGroupDoor.AccessGroupDoorId> {
     
-    Optional<AccessCard> findByCardHexAndIsActive(String cardHex, Boolean isActive);
+    @Query("SELECT agd FROM AccessGroupDoor agd WHERE agd.accessGroupId = :accessGroupId " +
+           "AND agd.doorId = :doorId AND agd.isActive = true")
+    Optional<AccessGroupDoor> findByAccessGroupIdAndDoorIdAndIsActive(
+            @Param("accessGroupId") Long accessGroupId, 
+            @Param("doorId") Long doorId);
     
-    @Query("SELECT ac FROM AccessCard ac WHERE ac.cardHex = :cardHex " +
-           "AND ac.isActive = true " +
-           "AND (ac.expiresAt IS NULL OR ac.expiresAt > :currentTime)")
-    Optional<AccessCard> findValidCardByCardHex(@Param("cardHex") String cardHex, 
-                                                 @Param("currentTime") LocalDateTime currentTime);
-    
-    List<AccessCard> findByEmployeePkAndIsActive(Long employeePk, Boolean isActive);
+    List<AccessGroupDoor> findByAccessGroupIdAndIsActive(Long accessGroupId, Boolean isActive);
 }
