@@ -4,12 +4,22 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class ValidateAccessRequest {
+public class BulkEventLogsRequest {
     private String controllerMac;
-    private String readerUuid;
-    private String cardUid;
-    private String timestamp;
+    private List<EventLog> events;
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class EventLog {
+        private String readerUuid;
+        private String cardUid;
+        private String eventType;
+        private String eventTime;
+    }
 }
