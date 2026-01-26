@@ -1,7 +1,7 @@
-mport com.accesscontrol.entity.Site;
+import com.accesscontrol.entity.Building;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public interface SiteRepository extends JpaRepository<Site, Long> {
+public interface BuildingRepository extends JpaRepository<Building, Long> {
 }
