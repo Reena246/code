@@ -7,6 +7,6 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class DoorEventResponse {
-    private String status;  // OK
+public class DbSyncRequest {
+    private String controllerMac;
 }
