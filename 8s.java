@@ -1,62 +1,51 @@
 package com.accesscontrol.service;
 
-import com.accesscontrol.dto.ValidateAccessRequest;
-import com.accesscontrol.dto.ValidateAccessResponse;
+import com.accesscontrol.dto.DbSyncRequest;
+import com.accesscontrol.dto.DbSyncResponse;
 import com.accesscontrol.entity.*;
-import com.accesscontrol.exception.AccessDeniedException;
 import com.accesscontrol.exception.ControllerNotFoundException;
 import com.accesscontrol.repository.*;
-import com.accesscontrol.security.AesEncryptionUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 /**
- * Service for real-time access validation
+ * Service for database synchronization with controllers
+ * Provides minimal payloads with reader-card mappings
  */
 @Service
-public class AccessControlService {
+public class DbSyncService {
 
-    private static final Logger logger = LoggerFactory.getLogger(AccessControlService.class);
-    private static final DateTimeFormatter TIMESTAMP_FORMATTER = DateTimeFormatter.ISO_DATE_TIME;
+    private static final Logger logger = LoggerFactory.getLogger(DbSyncService.class);
 
     private final ControllerRepository controllerRepository;
     private final ReaderRepository readerRepository;
     private final AccessCardRepository accessCardRepository;
     private final EmployeeRepository employeeRepository;
     private final AccessGroupDoorRepository accessGroupDoorRepository;
-    private final DoorRepository doorRepository;
-    private final AuditService auditService;
 
-    public AccessControlService(ControllerRepository controllerRepository,
-                                ReaderRepository readerRepository,
-                                AccessCardRepository accessCardRepository,
-                                EmployeeRepository employeeRepository,
-                                AccessGroupDoorRepository accessGroupDoorRepository,
-                                DoorRepository doorRepository,
-                                AuditService auditService) {
+    public DbSyncService(ControllerRepository controllerRepository,
+                        ReaderRepository readerRepository,
+                        AccessCardRepository accessCardRepository,
+                        EmployeeRepository employeeRepository,
+                        AccessGroupDoorRepository accessGroupDoorRepository) {
         this.controllerRepository = controllerRepository;
         this.readerRepository = readerRepository;
         this.accessCardRepository = accessCardRepository;
         this.employeeRepository = employeeRepository;
         this.accessGroupDoorRepository = accessGroupDoorRepository;
-        this.doorRepository = doorRepository;
-        this.auditService = auditService;
     }
 
-    @Transactional
-    public ValidateAccessResponse validateAccess(ValidateAccessRequest request, 
-                                                  LocalDateTime requestReceivedAt) {
-        LocalDateTime processedAt = LocalDateTime.now();
-        
-        logger.info("Validating access - controller_mac: {}, reader_uuid: {}, card_uid: {}",
-                request.getControllerMac(),
-                request.getReaderUuid(),
-                AesEncryptionUtil.maskCardUid(request.getCardUid()));
+    @Transactional(readOnly = true)
+    public DbSyncResponse syncDatabase(DbSyncRequest request) {
+        logger.info("DB sync requested - controller_mac: {}", request.getControllerMac());
 
         // Validate controller
         Controller controller = controllerRepository
@@ -64,86 +53,76 @@ public class AccessControlService {
                 .orElseThrow(() -> new ControllerNotFoundException(
                         "Controller not found or inactive: " + request.getControllerMac()));
 
-        // Validate reader
-        Reader reader = readerRepository
-                .findByReaderUuidAndIsActive(request.getReaderUuid(), true)
-                .orElseThrow(() -> new AccessDeniedException(
-                        "Reader not found or inactive", "READER_NOT_FOUND"));
+        // Get all readers for this controller
+        List<Reader> readers = readerRepository
+                .findByControllerIdAndIsActive(controller.getControllerId(), true);
 
-        // Validate reader belongs to controller
-        if (!reader.getControllerId().equals(controller.getControllerId())) {
-            throw new AccessDeniedException(
-                    "Reader does not belong to controller", "READER_CONTROLLER_MISMATCH");
+        List<DbSyncResponse.ReaderSync> readerSyncs = new ArrayList<>();
+
+        for (Reader reader : readers) {
+            if (reader.getDoorId() == null) {
+                // Skip readers without doors
+                continue;
+            }
+
+            // Get allowed cards for this door
+            List<String> allowedCards = getAllowedCardsForDoor(reader.getDoorId());
+
+            DbSyncResponse.ReaderSync readerSync = new DbSyncResponse.ReaderSync(
+                    reader.getReaderUuid(),
+                    allowedCards
+            );
+            readerSyncs.add(readerSync);
+
+            logger.debug("Reader: {} - Allowed cards: {}", 
+                    reader.getReaderUuid(), allowedCards.size());
         }
 
-        // Validate card
-        AccessCard card = accessCardRepository
-                .findValidCardByCardUid(request.getCardUid(), LocalDateTime.now())
-                .orElseThrow(() -> new AccessDeniedException(
-                        "Card not found, expired, or inactive", "CARD_INVALID"));
+        logger.info("DB sync completed - controller_mac: {}, readers: {}, total_cards: {}",
+                request.getControllerMac(),
+                readerSyncs.size(),
+                readerSyncs.stream().mapToInt(r -> r.getAllowedCards().size()).sum());
 
-        // Validate employee
-        Employee employee = employeeRepository
-                .findByEmployeePkAndIsActive(card.getEmployeePk(), true)
-                .orElseThrow(() -> new AccessDeniedException(
-                        "Employee not found or inactive", "EMPLOYEE_INACTIVE"));
+        return new DbSyncResponse(readerSyncs);
+    }
 
-        // Check if employee has access group
-        if (employee.getAccessGroupId() == null) {
-            auditService.logAccessAttempt(controller, reader, card, employee, 
-                    Audit.AuditResult.DENIED, "NO_ACCESS_GROUP", 
-                    requestReceivedAt, processedAt);
-            throw new AccessDeniedException(
-                    "Employee has no access group assigned", "NO_ACCESS_GROUP");
+    private List<String> getAllowedCardsForDoor(Long doorId) {
+        Set<String> allowedCards = new HashSet<>();
+
+        // Get all access groups that have ALLOW access to this door
+        List<AccessGroupDoor> accessGroupDoors = accessGroupDoorRepository
+                .findAll()
+                .stream()
+                .filter(agd -> agd.getDoorId().equals(doorId) 
+                        && agd.getIsActive()
+                        && agd.getAccessType() == AccessGroupDoor.AccessType.ALLOW)
+                .toList();
+
+        for (AccessGroupDoor agd : accessGroupDoors) {
+            // Get all employees in this access group
+            List<Employee> employees = employeeRepository
+                    .findAll()
+                    .stream()
+                    .filter(e -> e.getAccessGroupId() != null
+                            && e.getAccessGroupId().equals(agd.getAccessGroupId())
+                            && e.getIsActive())
+                    .toList();
+
+            // Get all valid cards for these employees
+            for (Employee employee : employees) {
+                List<AccessCard> cards = accessCardRepository
+                        .findByEmployeePkAndIsActive(employee.getEmployeePk(), true)
+                        .stream()
+                        .filter(card -> card.getExpiresAt() == null 
+                                || card.getExpiresAt().isAfter(LocalDateTime.now()))
+                        .toList();
+
+                for (AccessCard card : cards) {
+                    allowedCards.add(card.getCardUid());
+                }
+            }
         }
 
-        // Get door from reader
-        if (reader.getDoorId() == null) {
-            auditService.logAccessAttempt(controller, reader, card, employee,
-                    Audit.AuditResult.DENIED, "DOOR_NOT_CONFIGURED",
-                    requestReceivedAt, processedAt);
-            throw new AccessDeniedException(
-                    "Reader has no door configured", "DOOR_NOT_CONFIGURED");
-        }
-
-        Door door = doorRepository
-                .findByDoorIdAndIsActive(reader.getDoorId(), true)
-                .orElseThrow(() -> new AccessDeniedException(
-                        "Door not found or inactive", "DOOR_INACTIVE"));
-
-        // Check access permissions
-        AccessGroupDoor accessGroupDoor = accessGroupDoorRepository
-                .findByAccessGroupIdAndDoorIdAndIsActive(employee.getAccessGroupId(), door.getDoorId())
-                .orElse(null);
-
-        if (accessGroupDoor == null || 
-            accessGroupDoor.getAccessType() == AccessGroupDoor.AccessType.DENY) {
-            auditService.logAccessAttempt(controller, reader, card, employee,
-                    Audit.AuditResult.DENIED, "ACCESS_NOT_ALLOWED",
-                    requestReceivedAt, processedAt);
-            
-            logger.warn("Access denied - employee: {}, door: {}, reason: ACCESS_NOT_ALLOWED",
-                    employee.getEmployeePk(), door.getDoorId());
-            
-            return new ValidateAccessResponse("DENIED", null, 
-                    request.getReaderUuid(), "ACCESS_NOT_ALLOWED");
-        }
-
-        // Access granted
-        auditService.logAccessAttempt(controller, reader, card, employee,
-                Audit.AuditResult.SUCCESS, null,
-                requestReceivedAt, processedAt);
-
-        logger.info("Access granted - employee: {}, door: {}", 
-                employee.getEmployeePk(), door.getDoorId());
-
-        LocalDateTime responseSentAt = LocalDateTime.now();
-        
-        return new ValidateAccessResponse(
-                "SUCCESS",
-                door.getLockType() != null ? door.getLockType().name() : "MAGNETIC",
-                request.getReaderUuid(),
-                null
-        );
+        return new ArrayList<>(allowedCards);
     }
 }
