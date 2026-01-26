@@ -5,37 +5,28 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.io.Serializable;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "access_card")
+@Table(name = "access_group_door")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class AccessCard {
+@IdClass(AccessGroupDoor.AccessGroupDoorId.class)
+public class AccessGroupDoor {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "card_id")
-    private Long cardId;
+    @Column(name = "access_group_id")
+    private Long accessGroupId;
 
-    @Column(name = "employee_pk")
-    private Long employeePk;
+    @Id
+    @Column(name = "door_id")
+    private Long doorId;
 
-    @Column(name = "provider_id")
-    private Long providerId;
-
-    @Column(name = "card_uid")
-    private String cardUid;
-
-    @Column(name = "card_hex", nullable = false)
-    private String cardHex;
-
-    @Column(name = "issued_at")
-    private LocalDateTime issuedAt;
-
-    @Column(name = "expires_at")
-    private LocalDateTime expiresAt;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "access_type", nullable = false)
+    private AccessType accessType;
 
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;
@@ -51,6 +42,18 @@ public class AccessCard {
 
     @Column(name = "updated_by")
     private String updatedBy;
+
+    public enum AccessType {
+        ALLOW, DENY
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class AccessGroupDoorId implements Serializable {
+        private Long accessGroupId;
+        private Long doorId;
+    }
 
     @PrePersist
     protected void onCreate() {
