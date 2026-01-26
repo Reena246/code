@@ -1,65 +1,25 @@
+package com.accesscontrol.repository;
 
-package com.accesscontrol.entity;
-
-import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import com.accesscontrol.entity.AccessCard;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
 
-@Entity
-@Table(name = "access_card")
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-public class AccessCard {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "card_id")
-    private Long cardId;
-
-    @Column(name = "employee_pk")
-    private Long employeePk;
-
-    @Column(name = "provider_id")
-    private Long providerId;
-
-    @Column(name = "card_uid", nullable = false)
-    private String cardUid;
-
-    @Column(name = "issued_at")
-    private LocalDateTime issuedAt;
-
-    @Column(name = "expires_at")
-    private LocalDateTime expiresAt;
-
-    @Column(name = "is_active", nullable = false)
-    private Boolean isActive = true;
-
-    @Column(name = "created")
-    private LocalDateTime created;
-
-    @Column(name = "updated")
-    private LocalDateTime updated;
-
-    @Column(name = "created_by")
-    private String createdBy;
-
-    @Column(name = "updated_by")
-    private String updatedBy;
-
-    @PrePersist
-    protected void onCreate() {
-        created = LocalDateTime.now();
-        if (isActive == null) {
-            isActive = true;
-        }
-    }
-
-    @PreUpdate
-    protected void onUpdate() {
-        updated = LocalDateTime.now();
-    }
+@Repository
+public interface AccessCardRepository extends JpaRepository<AccessCard, Long> {
+    
+    Optional<AccessCard> findByCardUidAndIsActive(String cardUid, Boolean isActive);
+    
+    @Query("SELECT ac FROM AccessCard ac WHERE ac.cardUid = :cardUid " +
+           "AND ac.isActive = true " +
+           "AND (ac.expiresAt IS NULL OR ac.expiresAt > :currentTime)")
+    Optional<AccessCard> findValidCardByCardUid(@Param("cardUid") String cardUid, 
+                                                 @Param("currentTime") LocalDateTime currentTime);
+    
+    List<AccessCard> findByEmployeePkAndIsActive(Long employeePk, Boolean isActive);
 }
