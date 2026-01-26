@@ -1,7 +1,7 @@
 package com.accesscontrol.service;
 
-import com.accesscontrol.dto.DbSyncRequest;
-import com.accesscontrol.dto.DbSyncResponse;
+import com.accesscontrol.dto.BulkEventLogsRequest;
+import com.accesscontrol.dto.BulkEventLogsResponse;
 import com.accesscontrol.entity.*;
 import com.accesscontrol.exception.ControllerNotFoundException;
 import com.accesscontrol.repository.*;
@@ -11,41 +11,43 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashSet;
+import java.time.format.DateTimeFormatter;
+import java.util.Comparator;
 import java.util.List;
-import java.util.Set;
 
 /**
- * Service for database synchronization with controllers
- * Provides minimal payloads with reader-card mappings
+ * Service for processing bulk event logs from offline controllers
+ * Events are processed chronologically
  */
 @Service
-public class DbSyncService {
+public class BulkEventService {
 
-    private static final Logger logger = LoggerFactory.getLogger(DbSyncService.class);
+    private static final Logger logger = LoggerFactory.getLogger(BulkEventService.class);
+    private static final DateTimeFormatter TIMESTAMP_FORMATTER = DateTimeFormatter.ISO_DATE_TIME;
 
     private final ControllerRepository controllerRepository;
     private final ReaderRepository readerRepository;
     private final AccessCardRepository accessCardRepository;
     private final EmployeeRepository employeeRepository;
-    private final AccessGroupDoorRepository accessGroupDoorRepository;
+    private final AuditRepository auditRepository;
 
-    public DbSyncService(ControllerRepository controllerRepository,
-                        ReaderRepository readerRepository,
-                        AccessCardRepository accessCardRepository,
-                        EmployeeRepository employeeRepository,
-                        AccessGroupDoorRepository accessGroupDoorRepository) {
+    public BulkEventService(ControllerRepository controllerRepository,
+                           ReaderRepository readerRepository,
+                           AccessCardRepository accessCardRepository,
+                           EmployeeRepository employeeRepository,
+                           AuditRepository auditRepository) {
         this.controllerRepository = controllerRepository;
         this.readerRepository = readerRepository;
         this.accessCardRepository = accessCardRepository;
         this.employeeRepository = employeeRepository;
-        this.accessGroupDoorRepository = accessGroupDoorRepository;
+        this.auditRepository = auditRepository;
     }
 
-    @Transactional(readOnly = true)
-    public DbSyncResponse syncDatabase(DbSyncRequest request) {
-        logger.info("DB sync requested - controller_mac: {}", request.getControllerMac());
+    @Transactional
+    public BulkEventLogsResponse processBulkEvents(BulkEventLogsRequest request) {
+        logger.info("Processing bulk events - controller_mac: {}, event_count: {}",
+                request.getControllerMac(), 
+                request.getEvents() != null ? request.getEvents().size() : 0);
 
         // Validate controller
         Controller controller = controllerRepository
@@ -53,76 +55,112 @@ public class DbSyncService {
                 .orElseThrow(() -> new ControllerNotFoundException(
                         "Controller not found or inactive: " + request.getControllerMac()));
 
-        // Get all readers for this controller
-        List<Reader> readers = readerRepository
-                .findByControllerIdAndIsActive(controller.getControllerId(), true);
-
-        List<DbSyncResponse.ReaderSync> readerSyncs = new ArrayList<>();
-
-        for (Reader reader : readers) {
-            if (reader.getDoorId() == null) {
-                // Skip readers without doors
-                continue;
-            }
-
-            // Get allowed cards for this door
-            List<String> allowedCards = getAllowedCardsForDoor(reader.getDoorId());
-
-            DbSyncResponse.ReaderSync readerSync = new DbSyncResponse.ReaderSync(
-                    reader.getReaderUuid(),
-                    allowedCards
-            );
-            readerSyncs.add(readerSync);
-
-            logger.debug("Reader: {} - Allowed cards: {}", 
-                    reader.getReaderUuid(), allowedCards.size());
+        if (request.getEvents() == null || request.getEvents().isEmpty()) {
+            logger.warn("No events to process for controller: {}", request.getControllerMac());
+            return new BulkEventLogsResponse("RECEIVED", 0);
         }
 
-        logger.info("DB sync completed - controller_mac: {}, readers: {}, total_cards: {}",
-                request.getControllerMac(),
-                readerSyncs.size(),
-                readerSyncs.stream().mapToInt(r -> r.getAllowedCards().size()).sum());
-
-        return new DbSyncResponse(readerSyncs);
-    }
-
-    private List<String> getAllowedCardsForDoor(Long doorId) {
-        Set<String> allowedCards = new HashSet<>();
-
-        // Get all access groups that have ALLOW access to this door
-        List<AccessGroupDoor> accessGroupDoors = accessGroupDoorRepository
-                .findAll()
+        // Sort events chronologically by event_time
+        List<BulkEventLogsRequest.EventLog> sortedEvents = request.getEvents()
                 .stream()
-                .filter(agd -> agd.getDoorId().equals(doorId) 
-                        && agd.getIsActive()
-                        && agd.getAccessType() == AccessGroupDoor.AccessType.ALLOW)
+                .sorted(Comparator.comparing(e -> parseTimestamp(e.getEventTime())))
                 .toList();
 
-        for (AccessGroupDoor agd : accessGroupDoors) {
-            // Get all employees in this access group
-            List<Employee> employees = employeeRepository
-                    .findAll()
-                    .stream()
-                    .filter(e -> e.getAccessGroupId() != null
-                            && e.getAccessGroupId().equals(agd.getAccessGroupId())
-                            && e.getIsActive())
-                    .toList();
+        int processedCount = 0;
 
-            // Get all valid cards for these employees
-            for (Employee employee : employees) {
-                List<AccessCard> cards = accessCardRepository
-                        .findByEmployeePkAndIsActive(employee.getEmployeePk(), true)
-                        .stream()
-                        .filter(card -> card.getExpiresAt() == null 
-                                || card.getExpiresAt().isAfter(LocalDateTime.now()))
-                        .toList();
-
-                for (AccessCard card : cards) {
-                    allowedCards.add(card.getCardUid());
-                }
+        for (BulkEventLogsRequest.EventLog eventLog : sortedEvents) {
+            try {
+                processEvent(controller, eventLog);
+                processedCount++;
+            } catch (Exception e) {
+                logger.error("Failed to process event - reader_uuid: {}, card_uid: {}, error: {}",
+                        eventLog.getReaderUuid(),
+                        eventLog.getCardUid(),
+                        e.getMessage());
+                // Continue processing remaining events
             }
         }
 
-        return new ArrayList<>(allowedCards);
+        logger.info("Bulk events processed - controller_mac: {}, processed: {}/{}, received_at: {}",
+                request.getControllerMac(),
+                processedCount,
+                sortedEvents.size(),
+                LocalDateTime.now());
+
+        return new BulkEventLogsResponse("RECEIVED", processedCount);
+    }
+
+    private void processEvent(Controller controller, BulkEventLogsRequest.EventLog eventLog) {
+        LocalDateTime eventTime = parseTimestamp(eventLog.getEventTime());
+
+        // Find reader
+        Reader reader = readerRepository
+                .findByReaderUuidAndIsActive(eventLog.getReaderUuid(), true)
+                .orElse(null);
+
+        // Find card
+        AccessCard card = accessCardRepository
+                .findByCardUidAndIsActive(eventLog.getCardUid(), true)
+                .orElse(null);
+
+        Employee employee = null;
+        if (card != null) {
+            employee = employeeRepository
+                    .findByEmployeePkAndIsActive(card.getEmployeePk(), true)
+                    .orElse(null);
+        }
+
+        // Create audit record
+        Audit audit = new Audit();
+        audit.setControllerMac(controller.getControllerMac());
+        audit.setEventTime(eventTime);
+        
+        if (reader != null) {
+            audit.setReaderId(reader.getReaderId());
+            audit.setDoorId(reader.getDoorId());
+        }
+        
+        if (card != null) {
+            audit.setCardId(card.getCardId());
+        }
+        
+        if (employee != null) {
+            audit.setEmployeePk(employee.getEmployeePk());
+            audit.setCompanyId(employee.getCompanyId());
+        }
+
+        // Determine result based on event type
+        if ("OPEN".equalsIgnoreCase(eventLog.getEventType())) {
+            audit.setOpenedAt(eventTime);
+            audit.setResult(Audit.AuditResult.SUCCESS);
+        } else if ("CLOSE".equalsIgnoreCase(eventLog.getEventType())) {
+            audit.setClosedAt(eventTime);
+            // Calculate open duration if we have a previous OPEN event
+        } else if ("FORCED".equalsIgnoreCase(eventLog.getEventType())) {
+            audit.setResult(Audit.AuditResult.DENIED);
+            audit.setReason("FORCED_ENTRY");
+        }
+
+        audit.setRequestReceivedAt(LocalDateTime.now());
+        audit.setProcessedAt(LocalDateTime.now());
+        audit.setIsActive(true);
+
+        auditRepository.save(audit);
+
+        logger.debug("Event processed - reader: {}, card: {}, type: {}, time: {}",
+                eventLog.getReaderUuid(),
+                eventLog.getCardUid() != null ? "****" + eventLog.getCardUid().substring(
+                        Math.max(0, eventLog.getCardUid().length() - 4)) : "null",
+                eventLog.getEventType(),
+                eventTime);
+    }
+
+    private LocalDateTime parseTimestamp(String timestamp) {
+        try {
+            return LocalDateTime.parse(timestamp, TIMESTAMP_FORMATTER);
+        } catch (Exception e) {
+            logger.warn("Failed to parse timestamp: {}, using current time", timestamp);
+            return LocalDateTime.now();
+        }
     }
 }
