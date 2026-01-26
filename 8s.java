@@ -1,12 +1,12 @@
 package com.accesscontrol.repository;
 
-import com.accesscontrol.entity.DoorLock;
+import com.accesscontrol.entity.Controller;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
 
 @Repository
-public interface DoorLockRepository extends JpaRepository<DoorLock, Long> {
-    Optional<DoorLock> findByDoorIdAndIsActive(Long doorId, Boolean isActive);
+public interface ControllerRepository extends JpaRepository<Controller, Long> {
+    Optional<Controller> findByControllerMacAndIsActive(String controllerMac, Boolean isActive);
 }
