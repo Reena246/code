@@ -1,47 +1,51 @@
 package com.accesscontrol.service;
 
-import com.accesscontrol.dto.DoorEventRequest;
-import com.accesscontrol.entity.Audit;
-import com.accesscontrol.entity.Controller;
-import com.accesscontrol.entity.Reader;
+import com.accesscontrol.dto.DbSyncRequest;
+import com.accesscontrol.dto.DbSyncResponse;
+import com.accesscontrol.entity.*;
 import com.accesscontrol.exception.ControllerNotFoundException;
-import com.accesscontrol.repository.ControllerRepository;
-import com.accesscontrol.repository.ReaderRepository;
+import com.accesscontrol.repository.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 /**
- * Service for handling door events (OPEN, CLOSE, FORCED)
+ * Service for database synchronization with controllers
+ * Provides minimal payloads with reader-card mappings
  */
 @Service
-public class DoorEventService {
+public class DbSyncService {
 
-    private static final Logger logger = LoggerFactory.getLogger(DoorEventService.class);
-    private static final DateTimeFormatter TIMESTAMP_FORMATTER = DateTimeFormatter.ISO_DATE_TIME;
+    private static final Logger logger = LoggerFactory.getLogger(DbSyncService.class);
 
     private final ControllerRepository controllerRepository;
     private final ReaderRepository readerRepository;
-    private final AuditService auditService;
+    private final AccessCardRepository accessCardRepository;
+    private final EmployeeRepository employeeRepository;
+    private final AccessGroupDoorRepository accessGroupDoorRepository;
 
-    public DoorEventService(ControllerRepository controllerRepository,
-                           ReaderRepository readerRepository,
-                           AuditService auditService) {
+    public DbSyncService(ControllerRepository controllerRepository,
+                        ReaderRepository readerRepository,
+                        AccessCardRepository accessCardRepository,
+                        EmployeeRepository employeeRepository,
+                        AccessGroupDoorRepository accessGroupDoorRepository) {
         this.controllerRepository = controllerRepository;
         this.readerRepository = readerRepository;
-        this.auditService = auditService;
+        this.accessCardRepository = accessCardRepository;
+        this.employeeRepository = employeeRepository;
+        this.accessGroupDoorRepository = accessGroupDoorRepository;
     }
 
-    @Transactional
-    public void processDoorEvent(DoorEventRequest request) {
-        logger.info("Processing door event - controller_mac: {}, reader_uuid: {}, event_type: {}",
-                request.getControllerMac(),
-                request.getReaderUuid(),
-                request.getEventType());
+    @Transactional(readOnly = true)
+    public DbSyncResponse syncDatabase(DbSyncRequest request) {
+        logger.info("DB sync requested - controller_mac: {}", request.getControllerMac());
 
         // Validate controller
         Controller controller = controllerRepository
@@ -49,25 +53,76 @@ public class DoorEventService {
                 .orElseThrow(() -> new ControllerNotFoundException(
                         "Controller not found or inactive: " + request.getControllerMac()));
 
-        // Validate reader
-        Reader reader = readerRepository
-                .findByReaderUuidAndIsActive(request.getReaderUuid(), true)
-                .orElse(null);
+        // Get all readers for this controller
+        List<Reader> readers = readerRepository
+                .findByControllerIdAndIsActive(controller.getControllerId(), true);
 
-        LocalDateTime eventTime = parseTimestamp(request.getTimestamp());
+        List<DbSyncResponse.ReaderSync> readerSyncs = new ArrayList<>();
 
-        // Log event to audit
-        auditService.logDoorEvent(controller, reader, request.getEventType(), eventTime);
+        for (Reader reader : readers) {
+            if (reader.getDoorId() == null) {
+                // Skip readers without doors
+                continue;
+            }
 
-        logger.info("Door event processed successfully - event_type: {}", request.getEventType());
+            // Get allowed cards for this door
+            List<String> allowedCards = getAllowedCardsForDoor(reader.getDoorId());
+
+            DbSyncResponse.ReaderSync readerSync = new DbSyncResponse.ReaderSync(
+                    reader.getReaderUuid(),
+                    allowedCards
+            );
+            readerSyncs.add(readerSync);
+
+            logger.debug("Reader: {} - Allowed cards: {}", 
+                    reader.getReaderUuid(), allowedCards.size());
+        }
+
+        logger.info("DB sync completed - controller_mac: {}, readers: {}, total_cards: {}",
+                request.getControllerMac(),
+                readerSyncs.size(),
+                readerSyncs.stream().mapToInt(r -> r.getAllowedCards().size()).sum());
+
+        return new DbSyncResponse(readerSyncs);
     }
 
-    private LocalDateTime parseTimestamp(String timestamp) {
-        try {
-            return LocalDateTime.parse(timestamp, TIMESTAMP_FORMATTER);
-        } catch (Exception e) {
-            logger.warn("Failed to parse timestamp: {}, using current time", timestamp);
-            return LocalDateTime.now();
+    private List<String> getAllowedCardsForDoor(Long doorId) {
+        Set<String> allowedCards = new HashSet<>();
+
+        // Get all access groups that have ALLOW access to this door
+        List<AccessGroupDoor> accessGroupDoors = accessGroupDoorRepository
+                .findAll()
+                .stream()
+                .filter(agd -> agd.getDoorId().equals(doorId) 
+                        && agd.getIsActive()
+                        && agd.getAccessType() == AccessGroupDoor.AccessType.ALLOW)
+                .toList();
+
+        for (AccessGroupDoor agd : accessGroupDoors) {
+            // Get all employees in this access group
+            List<Employee> employees = employeeRepository
+                    .findAll()
+                    .stream()
+                    .filter(e -> e.getAccessGroupId() != null
+                            && e.getAccessGroupId().equals(agd.getAccessGroupId())
+                            && e.getIsActive())
+                    .toList();
+
+            // Get all valid cards for these employees
+            for (Employee employee : employees) {
+                List<AccessCard> cards = accessCardRepository
+                        .findByEmployeePkAndIsActive(employee.getEmployeePk(), true)
+                        .stream()
+                        .filter(card -> card.getExpiresAt() == null 
+                                || card.getExpiresAt().isAfter(LocalDateTime.now()))
+                        .toList();
+
+                for (AccessCard card : cards) {
+                    allowedCards.add(card.getCardHex());
+                }
+            }
         }
+
+        return new ArrayList<>(allowedCards);
     }
 }
