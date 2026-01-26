@@ -1,166 +1,148 @@
 package com.accesscontrol.service;
 
-import com.accesscontrol.dto.BulkEventLogsRequest;
-import com.accesscontrol.dto.BulkEventLogsResponse;
 import com.accesscontrol.entity.*;
-import com.accesscontrol.exception.ControllerNotFoundException;
-import com.accesscontrol.repository.*;
+import com.accesscontrol.repository.AuditRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.util.Comparator;
-import java.util.List;
+import java.time.temporal.ChronoUnit;
 
 /**
- * Service for processing bulk event logs from offline controllers
- * Events are processed chronologically
+ * Service for audit logging with structured logging
  */
 @Service
-public class BulkEventService {
+public class AuditService {
 
-    private static final Logger logger = LoggerFactory.getLogger(BulkEventService.class);
-    private static final DateTimeFormatter TIMESTAMP_FORMATTER = DateTimeFormatter.ISO_DATE_TIME;
+    private static final Logger logger = LoggerFactory.getLogger(AuditService.class);
 
-    private final ControllerRepository controllerRepository;
-    private final ReaderRepository readerRepository;
-    private final AccessCardRepository accessCardRepository;
-    private final EmployeeRepository employeeRepository;
     private final AuditRepository auditRepository;
 
-    public BulkEventService(ControllerRepository controllerRepository,
-                           ReaderRepository readerRepository,
-                           AccessCardRepository accessCardRepository,
-                           EmployeeRepository employeeRepository,
-                           AuditRepository auditRepository) {
-        this.controllerRepository = controllerRepository;
-        this.readerRepository = readerRepository;
-        this.accessCardRepository = accessCardRepository;
-        this.employeeRepository = employeeRepository;
+    public AuditService(AuditRepository auditRepository) {
         this.auditRepository = auditRepository;
     }
 
     @Transactional
-    public BulkEventLogsResponse processBulkEvents(BulkEventLogsRequest request) {
-        logger.info("Processing bulk events - controller_mac: {}, event_count: {}",
-                request.getControllerMac(), 
-                request.getEvents() != null ? request.getEvents().size() : 0);
-
-        // Validate controller
-        Controller controller = controllerRepository
-                .findByControllerMacAndIsActive(request.getControllerMac(), true)
-                .orElseThrow(() -> new ControllerNotFoundException(
-                        "Controller not found or inactive: " + request.getControllerMac()));
-
-        if (request.getEvents() == null || request.getEvents().isEmpty()) {
-            logger.warn("No events to process for controller: {}", request.getControllerMac());
-            return new BulkEventLogsResponse("RECEIVED", 0);
-        }
-
-        // Sort events chronologically by event_time
-        List<BulkEventLogsRequest.EventLog> sortedEvents = request.getEvents()
-                .stream()
-                .sorted(Comparator.comparing(e -> parseTimestamp(e.getEventTime())))
-                .toList();
-
-        int processedCount = 0;
-
-        for (BulkEventLogsRequest.EventLog eventLog : sortedEvents) {
-            try {
-                processEvent(controller, eventLog);
-                processedCount++;
-            } catch (Exception e) {
-                logger.error("Failed to process event - reader_uuid: {}, card_hex: {}, error: {}",
-                        eventLog.getReaderUuid(),
-                        eventLog.getCardHex(),
-                        e.getMessage());
-                // Continue processing remaining events
-            }
-        }
-
-        logger.info("Bulk events processed - controller_mac: {}, processed: {}/{}, received_at: {}",
-                request.getControllerMac(),
-                processedCount,
-                sortedEvents.size(),
-                LocalDateTime.now());
-
-        return new BulkEventLogsResponse("RECEIVED", processedCount);
-    }
-
-    private void processEvent(Controller controller, BulkEventLogsRequest.EventLog eventLog) {
-        LocalDateTime eventTime = parseTimestamp(eventLog.getEventTime());
-
-        // Find reader
-        Reader reader = readerRepository
-                .findByReaderUuidAndIsActive(eventLog.getReaderUuid(), true)
-                .orElse(null);
-
-        // Find card
-        AccessCard card = accessCardRepository
-                .findByCardHexAndIsActive(eventLog.getCardHex(), true)
-                .orElse(null);
-
-        Employee employee = null;
-        if (card != null) {
-            employee = employeeRepository
-                    .findByEmployeePkAndIsActive(card.getEmployeePk(), true)
-                    .orElse(null);
-        }
-
-        // Create audit record
+    public void logAccessAttempt(Controller controller, 
+                                 Reader reader, 
+                                 AccessCard card,
+                                 Employee employee,
+                                 Audit.AuditResult result,
+                                 String reason,
+                                 LocalDateTime requestReceivedAt,
+                                 LocalDateTime processedAt) {
+        
         Audit audit = new Audit();
         audit.setControllerMac(controller.getControllerMac());
-        audit.setEventTime(eventTime);
+        audit.setReaderId(reader.getReaderId());
+        audit.setDoorId(reader.getDoorId());
+        audit.setCardId(card.getCardId());
+        audit.setEmployeePk(employee.getEmployeePk());
+        audit.setCompanyId(employee.getCompanyId());
+        audit.setEventTime(LocalDateTime.now());
+        audit.setResult(result);
+        audit.setReason(reason);
+        audit.setRequestReceivedAt(requestReceivedAt);
+        audit.setProcessedAt(processedAt);
+        audit.setResponseSentAt(LocalDateTime.now());
+        audit.setIsActive(true);
+
+        auditRepository.save(audit);
+
+        // Structured logging
+        logger.info("AUDIT: controller_mac={}, reader_id={}, door_id={}, employee_pk={}, " +
+                   "card_id={}, result={}, reason={}, request_received={}, processed={}, response_sent={}",
+                audit.getControllerMac(),
+                audit.getReaderId(),
+                audit.getDoorId(),
+                audit.getEmployeePk(),
+                audit.getCardId(),
+                audit.getResult(),
+                audit.getReason(),
+                audit.getRequestReceivedAt(),
+                audit.getProcessedAt(),
+                audit.getResponseSentAt());
+    }
+
+    @Transactional
+    public void logDoorEvent(Controller controller, 
+                            Reader reader, 
+                            String eventType, 
+                            LocalDateTime eventTime) {
+        
+        Audit audit = new Audit();
+        audit.setControllerMac(controller.getControllerMac());
         
         if (reader != null) {
             audit.setReaderId(reader.getReaderId());
             audit.setDoorId(reader.getDoorId());
         }
         
-        if (card != null) {
-            audit.setCardId(card.getCardId());
-        }
+        audit.setEventTime(eventTime);
         
-        if (employee != null) {
-            audit.setEmployeePk(employee.getEmployeePk());
-            audit.setCompanyId(employee.getCompanyId());
-        }
-
-        // Determine result based on event type
-        if ("OPEN".equalsIgnoreCase(eventLog.getEventType())) {
+        // Set appropriate fields based on event type
+        if ("OPEN".equalsIgnoreCase(eventType)) {
             audit.setOpenedAt(eventTime);
-            audit.setResult(Audit.AuditResult.SUCCESS);
-        } else if ("CLOSE".equalsIgnoreCase(eventLog.getEventType())) {
+        } else if ("CLOSE".equalsIgnoreCase(eventType)) {
             audit.setClosedAt(eventTime);
-            // Calculate open duration if we have a previous OPEN event
-        } else if ("FORCED".equalsIgnoreCase(eventLog.getEventType())) {
+            // Try to find matching OPEN event to calculate duration
+            calculateDoorOpenDuration(audit);
+        } else if ("FORCED".equalsIgnoreCase(eventType)) {
             audit.setResult(Audit.AuditResult.DENIED);
             audit.setReason("FORCED_ENTRY");
         }
-
+        
         audit.setRequestReceivedAt(LocalDateTime.now());
         audit.setProcessedAt(LocalDateTime.now());
         audit.setIsActive(true);
 
         auditRepository.save(audit);
 
-        logger.debug("Event processed - reader: {}, card: {}, type: {}, time: {}",
-                eventLog.getReaderUuid(),
-                eventLog.getCardHex() != null ? "****" + eventLog.getCardHex().substring(
-                        Math.max(0, eventLog.getCardHex().length() - 4)) : "null",
-                eventLog.getEventType(),
+        logger.info("DOOR_EVENT: controller_mac={}, reader_id={}, door_id={}, event_type={}, event_time={}",
+                audit.getControllerMac(),
+                audit.getReaderId(),
+                audit.getDoorId(),
+                eventType,
                 eventTime);
     }
 
-    private LocalDateTime parseTimestamp(String timestamp) {
+    private void calculateDoorOpenDuration(Audit closeAudit) {
+        if (closeAudit.getDoorId() == null || closeAudit.getClosedAt() == null) {
+            return;
+        }
+
         try {
-            return LocalDateTime.parse(timestamp, TIMESTAMP_FORMATTER);
+            // Find the most recent OPEN event for this door
+            LocalDateTime searchStart = closeAudit.getClosedAt().minusMinutes(30);
+            List<Audit> recentEvents = auditRepository
+                    .findByControllerMacAndEventTimeBetween(
+                            closeAudit.getControllerMac(),
+                            searchStart,
+                            closeAudit.getClosedAt());
+
+            recentEvents.stream()
+                    .filter(a -> a.getDoorId() != null 
+                            && a.getDoorId().equals(closeAudit.getDoorId())
+                            && a.getOpenedAt() != null)
+                    .max((a1, a2) -> a1.getOpenedAt().compareTo(a2.getOpenedAt()))
+                    .ifPresent(openAudit -> {
+                        long seconds = ChronoUnit.SECONDS.between(
+                                openAudit.getOpenedAt(), 
+                                closeAudit.getClosedAt());
+                        closeAudit.setOpenSeconds((int) seconds);
+
+                        // Calculate average open time for this door
+                        LocalDateTime last30Days = LocalDateTime.now().minusDays(30);
+                        Double avgSeconds = auditRepository
+                                .findAverageOpenSecondsByDoorId(closeAudit.getDoorId(), last30Days);
+                        if (avgSeconds != null) {
+                            closeAudit.setAvgOpenSeconds(avgSeconds.intValue());
+                        }
+                    });
         } catch (Exception e) {
-            logger.warn("Failed to parse timestamp: {}, using current time", timestamp);
-            return LocalDateTime.now();
+            logger.warn("Failed to calculate door open duration: {}", e.getMessage());
         }
     }
 }
