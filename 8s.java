@@ -1,224 +1,64 @@
-package com.accesscontrol.controller;
+package com.accesscontrol.config;
 
-import com.accesscontrol.dto.*;
-import com.accesscontrol.exception.EncryptionException;
-import com.accesscontrol.security.AesEncryptionUtil;
-import com.accesscontrol.service.BulkEventService;
-import com.accesscontrol.service.DbSyncService;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.Schema;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.info.Contact;
+import io.swagger.v3.oas.models.info.Info;
+import io.swagger.v3.oas.models.info.License;
+import io.swagger.v3.oas.models.servers.Server;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
+import java.util.List;
 
 /**
- * Controller for database sync, bulk events, and health checks
- * All payloads are encrypted with AES-256/CBC/PKCS5Padding
+ * Swagger/OpenAPI Configuration
+ * Access UI at: http://localhost:8080/swagger-ui.html
+ * Access API docs at: http://localhost:8080/api-docs
  */
-@RestController
-@RequestMapping("/controller")
-@Tag(name = "Controller Sync", description = "Database synchronization and offline event handling")
-public class ControllerSyncController {
+@Configuration
+public class SwaggerConfig {
 
-    private static final Logger logger = LoggerFactory.getLogger(ControllerSyncController.class);
-    private static final String IV_HEADER = "X-IV";
+    @Value("${server.port:8080}")
+    private String serverPort;
 
-    private final DbSyncService dbSyncService;
-    private final BulkEventService bulkEventService;
-    private final AesEncryptionUtil encryptionUtil;
-
-    public ControllerSyncController(DbSyncService dbSyncService,
-                                   BulkEventService bulkEventService,
-                                   AesEncryptionUtil encryptionUtil) {
-        this.dbSyncService = dbSyncService;
-        this.bulkEventService = bulkEventService;
-        this.encryptionUtil = encryptionUtil;
-    }
-
-    @PostMapping(value = "/db-sync",
-                 consumes = MediaType.APPLICATION_OCTET_STREAM_VALUE,
-                 produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
-    @Operation(
-        summary = "Database synchronization",
-        description = "Sync allowed cards for each reader. Returns minimal payload optimized for offline controllers. " +
-                     "Triggered periodically or on reconnect.",
-        parameters = {
-            @Parameter(name = "X-IV", description = "Base64-encoded IV for encryption/decryption", required = true)
-        },
-        requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
-            description = "Encrypted DbSyncRequest: {controllerMac}",
-            content = @Content(mediaType = "application/octet-stream")
-        ),
-        responses = {
-            @ApiResponse(responseCode = "200", description = "Sync data returned",
-                content = @Content(mediaType = "application/octet-stream",
-                    schema = @Schema(description = "Encrypted DbSyncResponse: {readers: [{readerUuid, allowedCards: [cardHex]}]}"))),
-            @ApiResponse(responseCode = "400", description = "Invalid request or encryption error")
-        }
-    )
-    public ResponseEntity<byte[]> dbSync(
-            @RequestHeader(IV_HEADER) String iv,
-            @RequestBody byte[] encryptedRequest) {
-
-        try {
-            // Validate IV
-            if (!encryptionUtil.isValidIV(iv)) {
-                throw new EncryptionException("Invalid or missing X-IV header");
-            }
-
-            // Decrypt request
-            DbSyncRequest request = encryptionUtil.decrypt(
-                    encryptedRequest, iv, DbSyncRequest.class);
-
-            logger.info("DB sync request - controller_mac: {}", request.getControllerMac());
-
-            // Process sync
-            DbSyncResponse response = dbSyncService.syncDatabase(request);
-
-            // Encrypt response with SAME IV
-            byte[] encryptedResponse = encryptionUtil.encrypt(response, iv);
-
-            logger.info("DB sync completed - controller_mac: {}, readers: {}, total_cards: {}",
-                    request.getControllerMac(),
-                    response.getReaders().size(),
-                    response.getReaders().stream()
-                            .mapToInt(r -> r.getAllowedCards().size()).sum());
-
-            return ResponseEntity.ok()
-                    .header(IV_HEADER, iv)
-                    .body(encryptedResponse);
-
-        } catch (EncryptionException e) {
-            logger.error("Encryption error: {}", e.getMessage());
-            throw e;
-        } catch (Exception e) {
-            logger.error("DB sync error: {}", e.getMessage(), e);
-            throw new RuntimeException("DB sync failed: " + e.getMessage(), e);
-        }
-    }
-
-    @PostMapping(value = "/bulk-event-logs",
-                 consumes = MediaType.APPLICATION_OCTET_STREAM_VALUE,
-                 produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
-    @Operation(
-        summary = "Upload bulk event logs",
-        description = "Upload events collected during offline mode. Events are processed chronologically. " +
-                     "Called after controller reconnects.",
-        parameters = {
-            @Parameter(name = "X-IV", description = "Base64-encoded IV for encryption/decryption", required = true)
-        },
-        requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
-            description = "Encrypted BulkEventLogsRequest: {controllerMac, events: [{readerUuid, cardHex, eventType, eventTime}]}",
-            content = @Content(mediaType = "application/octet-stream")
-        ),
-        responses = {
-            @ApiResponse(responseCode = "200", description = "Events received and processed",
-                content = @Content(mediaType = "application/octet-stream",
-                    schema = @Schema(description = "Encrypted BulkEventLogsResponse: {status, processedCount}"))),
-            @ApiResponse(responseCode = "400", description = "Invalid request or encryption error")
-        }
-    )
-    public ResponseEntity<byte[]> bulkEventLogs(
-            @RequestHeader(IV_HEADER) String iv,
-            @RequestBody byte[] encryptedRequest) {
-
-        try {
-            // Validate IV
-            if (!encryptionUtil.isValidIV(iv)) {
-                throw new EncryptionException("Invalid or missing X-IV header");
-            }
-
-            // Decrypt request
-            BulkEventLogsRequest request = encryptionUtil.decrypt(
-                    encryptedRequest, iv, BulkEventLogsRequest.class);
-
-            logger.info("Bulk event logs request - controller_mac: {}, event_count: {}",
-                    request.getControllerMac(),
-                    request.getEvents() != null ? request.getEvents().size() : 0);
-
-            // Process bulk events
-            BulkEventLogsResponse response = bulkEventService.processBulkEvents(request);
-
-            // Encrypt response with SAME IV
-            byte[] encryptedResponse = encryptionUtil.encrypt(response, iv);
-
-            return ResponseEntity.ok()
-                    .header(IV_HEADER, iv)
-                    .body(encryptedResponse);
-
-        } catch (EncryptionException e) {
-            logger.error("Encryption error: {}", e.getMessage());
-            throw e;
-        } catch (Exception e) {
-            logger.error("Bulk event logs error: {}", e.getMessage(), e);
-            throw new RuntimeException("Bulk event logs processing failed: " + e.getMessage(), e);
-        }
-    }
-
-    @PostMapping(value = "/ping",
-                 consumes = MediaType.APPLICATION_OCTET_STREAM_VALUE,
-                 produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
-    @Operation(
-        summary = "Controller health check",
-        description = "Verify connectivity and get server time.",
-        parameters = {
-            @Parameter(name = "X-IV", description = "Base64-encoded IV for encryption/decryption", required = true)
-        },
-        requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
-            description = "Encrypted PingRequest: {controllerMac}",
-            content = @Content(mediaType = "application/octet-stream")
-        ),
-        responses = {
-            @ApiResponse(responseCode = "200", description = "Ping successful",
-                content = @Content(mediaType = "application/octet-stream",
-                    schema = @Schema(description = "Encrypted PingResponse: {status, serverTime}"))),
-            @ApiResponse(responseCode = "400", description = "Invalid request or encryption error")
-        }
-    )
-    public ResponseEntity<byte[]> ping(
-            @RequestHeader(IV_HEADER) String iv,
-            @RequestBody byte[] encryptedRequest) {
-
-        try {
-            // Validate IV
-            if (!encryptionUtil.isValidIV(iv)) {
-                throw new EncryptionException("Invalid or missing X-IV header");
-            }
-
-            // Decrypt request
-            PingRequest request = encryptionUtil.decrypt(
-                    encryptedRequest, iv, PingRequest.class);
-
-            logger.debug("Ping request - controller_mac: {}", request.getControllerMac());
-
-            // Create response
-            PingResponse response = new PingResponse(
-                    "OK",
-                    LocalDateTime.now().format(DateTimeFormatter.ISO_DATE_TIME)
-            );
-
-            // Encrypt response with SAME IV
-            byte[] encryptedResponse = encryptionUtil.encrypt(response, iv);
-
-            return ResponseEntity.ok()
-                    .header(IV_HEADER, iv)
-                    .body(encryptedResponse);
-
-        } catch (EncryptionException e) {
-            logger.error("Encryption error: {}", e.getMessage());
-            throw e;
-        } catch (Exception e) {
-            logger.error("Ping error: {}", e.getMessage(), e);
-            throw new RuntimeException("Ping failed: " + e.getMessage(), e);
-        }
+    @Bean
+    public OpenAPI accessControlOpenAPI() {
+        return new OpenAPI()
+                .info(new Info()
+                        .title("Access Control System API")
+                        .description(
+                                "Production-grade Physical Access Control System\n\n" +
+                                "**SECURITY NOTICE:**\n" +
+                                "- All endpoints accept/return encrypted payloads (AES-256/CBC/PKCS5Padding)\n" +
+                                "- Random IV per request via X-IV header (Base64 encoded)\n" +
+                                "- Same IV used for request decryption and response encryption\n" +
+                                "- Swagger shows unencrypted payloads for internal testing only\n\n" +
+                                "**FEATURES:**\n" +
+                                "- Real-time card validation\n" +
+                                "- Door event logging (OPEN/CLOSE/FORCED)\n" +
+                                "- Offline/online controller support\n" +
+                                "- Database synchronization with minimal payloads\n" +
+                                "- Bulk event upload after reconnect\n" +
+                                "- Chronological audit logging\n\n" +
+                                "**DATABASE:** access_control_db (MySQL)\n" +
+                                "**FRAMEWORK:** Spring Boot 3.4.1 with Java 21\n" +
+                                "**LOGGING:** Log4j2 with structured logging"
+                        )
+                        .version("1.0.0")
+                        .contact(new Contact()
+                                .name("Access Control System Team")
+                                .email("support@accesscontrol.com"))
+                        .license(new License()
+                                .name("Proprietary")
+                                .url("https://accesscontrol.com/license")))
+                .servers(List.of(
+                        new Server()
+                                .url("http://localhost:" + serverPort)
+                                .description("Local Development Server"),
+                        new Server()
+                                .url("https://api.accesscontrol.com")
+                                .description("Production Server")
+                ));
     }
 }
