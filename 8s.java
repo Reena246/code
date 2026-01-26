@@ -9,14 +9,17 @@ import java.util.List;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class DbSyncResponse {
-    private List<ReaderSync> readers;
+public class BulkEventLogsRequest {
+    private String controllerMac;
+    private List<EventLog> events;
 
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
-    public static class ReaderSync {
+    public static class EventLog {
         private String readerUuid;
-        private List<String> allowedCards;
+        private String cardHex;
+        private String eventType;
+        private String eventTime;
     }
 }
