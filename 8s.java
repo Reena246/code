@@ -7,9 +7,9 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class ValidateAccessRequest {
-    private String controllerMac;
+public class ValidateAccessResponse {
+    private String result;  // SUCCESS or DENIED
+    private String lockType;  // MAGNETIC or STRIKE
     private String readerUuid;
-    private String cardHex;
-    private String timestamp;
+    private String reason;
 }
