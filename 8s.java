@@ -1,166 +1,104 @@
-package com.accesscontrol.security;
+package com.accesscontrol.controller;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.commons.codec.binary.Base64;
+import com.accesscontrol.dto.ValidateAccessRequest;
+import com.accesscontrol.dto.ValidateAccessResponse;
+import com.accesscontrol.exception.EncryptionException;
+import com.accesscontrol.security.AesEncryptionUtil;
+import com.accesscontrol.service.AccessControlService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 
-import javax.crypto.Cipher;
-import javax.crypto.spec.IvParameterSpec;
-import javax.crypto.spec.SecretKeySpec;
-import java.nio.charset.StandardCharsets;
-import java.security.SecureRandom;
+import java.time.LocalDateTime;
 
 /**
- * AES-256/CBC/PKCS5Padding encryption utility
- * Handles encryption/decryption with random IV per request
+ * Controller for real-time access validation
+ * All payloads are encrypted with AES-256/CBC/PKCS5Padding
  */
-@Component
-public class AesEncryptionUtil {
+@RestController
+@RequestMapping("/access")
+@Tag(name = "Access Control", description = "Real-time card validation and access control")
+public class AccessControlController {
 
-    private static final Logger logger = LoggerFactory.getLogger(AesEncryptionUtil.class);
-    private static final String ALGORITHM = "AES/CBC/PKCS5Padding";
-    private static final String KEY_ALGORITHM = "AES";
-    private static final int IV_SIZE = 16; // 128 bits for AES
+    private static final Logger logger = LoggerFactory.getLogger(AccessControlController.class);
+    private static final String IV_HEADER = "X-IV";
 
-    private final SecretKeySpec secretKey;
-    private final ObjectMapper objectMapper;
+    private final AccessControlService accessControlService;
+    private final AesEncryptionUtil encryptionUtil;
 
-    public AesEncryptionUtil(@Value("${encryption.key}") String encryptionKey, 
-                             ObjectMapper objectMapper) {
-        // Ensure key is 32 bytes for AES-256
-        byte[] keyBytes = encryptionKey.getBytes(StandardCharsets.UTF_8);
-        if (keyBytes.length != 32) {
-            throw new IllegalArgumentException("Encryption key must be 32 bytes for AES-256");
+    public AccessControlController(AccessControlService accessControlService,
+                                   AesEncryptionUtil encryptionUtil) {
+        this.accessControlService = accessControlService;
+        this.encryptionUtil = encryptionUtil;
+    }
+
+    @PostMapping(value = "/validate", 
+                 consumes = MediaType.APPLICATION_OCTET_STREAM_VALUE,
+                 produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
+    @Operation(
+        summary = "Validate access card",
+        description = "Real-time validation of access card. Request and response are encrypted with AES-256/CBC. " +
+                     "IV must be provided via X-IV header (Base64 encoded). Same IV is used for response encryption.",
+        parameters = {
+            @Parameter(name = "X-IV", description = "Base64-encoded IV for encryption/decryption", required = true)
+        },
+        requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
+            description = "Encrypted ValidateAccessRequest: {controllerMac, readerUuid, cardUid, timestamp}",
+            content = @Content(mediaType = "application/octet-stream")
+        ),
+        responses = {
+            @ApiResponse(responseCode = "200", description = "Access validated",
+                content = @Content(mediaType = "application/octet-stream",
+                    schema = @Schema(description = "Encrypted ValidateAccessResponse: {result, lockType, readerUuid, reason}"))),
+            @ApiResponse(responseCode = "400", description = "Invalid request or encryption error"),
+            @ApiResponse(responseCode = "404", description = "Controller not found")
         }
-        this.secretKey = new SecretKeySpec(keyBytes, KEY_ALGORITHM);
-        this.objectMapper = objectMapper;
-    }
+    )
+    public ResponseEntity<byte[]> validateAccess(
+            @RequestHeader(IV_HEADER) String iv,
+            @RequestBody byte[] encryptedRequest) {
 
-    /**
-     * Generate a random IV (Initialization Vector)
-     * @return Base64-encoded IV string
-     */
-    public String generateIV() {
-        byte[] iv = new byte[IV_SIZE];
-        SecureRandom secureRandom = new SecureRandom();
-        secureRandom.nextBytes(iv);
-        return Base64.encodeBase64String(iv);
-    }
+        LocalDateTime requestReceivedAt = LocalDateTime.now();
 
-    /**
-     * Encrypt an object to byte array using the provided IV
-     * @param object Object to encrypt
-     * @param ivBase64 Base64-encoded IV
-     * @return Encrypted byte array
-     */
-    public byte[] encrypt(Object object, String ivBase64) throws Exception {
         try {
-            // Convert object to JSON string
-            String jsonData = objectMapper.writeValueAsString(object);
-            
-            // Decode IV from Base64
-            byte[] ivBytes = Base64.decodeBase64(ivBase64);
-            if (ivBytes.length != IV_SIZE) {
-                throw new IllegalArgumentException("Invalid IV size");
+            // Validate IV
+            if (!encryptionUtil.isValidIV(iv)) {
+                throw new EncryptionException("Invalid or missing X-IV header");
             }
-            
-            IvParameterSpec ivSpec = new IvParameterSpec(ivBytes);
-            
-            // Initialize cipher
-            Cipher cipher = Cipher.getInstance(ALGORITHM);
-            cipher.init(Cipher.ENCRYPT_MODE, secretKey, ivSpec);
-            
-            // Encrypt
-            byte[] encrypted = cipher.doFinal(jsonData.getBytes(StandardCharsets.UTF_8));
-            
-            logger.debug("Successfully encrypted data with IV: {}", maskIV(ivBase64));
-            return encrypted;
-            
+
+            // Decrypt request
+            ValidateAccessRequest request = encryptionUtil.decrypt(
+                    encryptedRequest, iv, ValidateAccessRequest.class);
+
+            logger.info("Access validation request - controller_mac: {}, reader_uuid: {}",
+                    request.getControllerMac(), request.getReaderUuid());
+
+            // Process validation
+            ValidateAccessResponse response = accessControlService.validateAccess(
+                    request, requestReceivedAt);
+
+            // Encrypt response with SAME IV
+            byte[] encryptedResponse = encryptionUtil.encrypt(response, iv);
+
+            return ResponseEntity.ok()
+                    .header(IV_HEADER, iv)
+                    .body(encryptedResponse);
+
+        } catch (EncryptionException e) {
+            logger.error("Encryption error: {}", e.getMessage());
+            throw e;
         } catch (Exception e) {
-            logger.error("Encryption failed: {}", e.getMessage());
-            throw new Exception("Encryption failed: " + e.getMessage(), e);
+            logger.error("Validation error: {}", e.getMessage(), e);
+            throw new RuntimeException("Validation failed: " + e.getMessage(), e);
         }
-    }
-
-    /**
-     * Decrypt byte array to specified class using the provided IV
-     * @param encryptedData Encrypted byte array
-     * @param ivBase64 Base64-encoded IV
-     * @param clazz Target class type
-     * @return Decrypted object
-     */
-    public <T> T decrypt(byte[] encryptedData, String ivBase64, Class<T> clazz) throws Exception {
-        try {
-            // Decode IV from Base64
-            byte[] ivBytes = Base64.decodeBase64(ivBase64);
-            if (ivBytes.length != IV_SIZE) {
-                throw new IllegalArgumentException("Invalid IV size");
-            }
-            
-            IvParameterSpec ivSpec = new IvParameterSpec(ivBytes);
-            
-            // Initialize cipher
-            Cipher cipher = Cipher.getInstance(ALGORITHM);
-            cipher.init(Cipher.DECRYPT_MODE, secretKey, ivSpec);
-            
-            // Decrypt
-            byte[] decrypted = cipher.doFinal(encryptedData);
-            String jsonData = new String(decrypted, StandardCharsets.UTF_8);
-            
-            // Convert JSON to object
-            T result = objectMapper.readValue(jsonData, clazz);
-            
-            logger.debug("Successfully decrypted data with IV: {}", maskIV(ivBase64));
-            return result;
-            
-        } catch (Exception e) {
-            logger.error("Decryption failed: {}", e.getMessage());
-            throw new Exception("Decryption failed: " + e.getMessage(), e);
-        }
-    }
-
-    /**
-     * Validate IV format and size
-     * @param ivBase64 Base64-encoded IV
-     * @return true if valid
-     */
-    public boolean isValidIV(String ivBase64) {
-        if (ivBase64 == null || ivBase64.isEmpty()) {
-            return false;
-        }
-        try {
-            byte[] ivBytes = Base64.decodeBase64(ivBase64);
-            return ivBytes.length == IV_SIZE;
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
-    /**
-     * Mask IV for logging (show only first 4 characters)
-     * @param iv IV string
-     * @return Masked IV
-     */
-    private String maskIV(String iv) {
-        if (iv == null || iv.length() < 4) {
-            return "****";
-        }
-        return iv.substring(0, 4) + "****";
-    }
-
-    /**
-     * Mask card UID for logging (show only last 4 characters)
-     * @param cardUid Card UID string
-     * @return Masked card UID
-     */
-    public static String maskCardUid(String cardUid) {
-        if (cardUid == null || cardUid.length() < 4) {
-            return "****";
-        }
-        int length = cardUid.length();
-        return "****" + cardUid.substring(length - 4);
     }
 }
