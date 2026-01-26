@@ -1,7 +1,9 @@
-import com.accesscontrol.entity.Building;
+package com.accesscontrol.repository;
+
+import com.accesscontrol.entity.Floor;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public interface BuildingRepository extends JpaRepository<Building, Long> {
+public interface FloorRepository extends JpaRepository<Floor, Long> {
 }
