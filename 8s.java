@@ -1,224 +1,150 @@
-package com.accesscontrol.controller;
+package com.accesscontrol;
 
-import com.accesscontrol.dto.*;
-import com.accesscontrol.exception.EncryptionException;
-import com.accesscontrol.security.AesEncryptionUtil;
-import com.accesscontrol.service.BulkEventService;
-import com.accesscontrol.service.DbSyncService;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.Schema;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.commons.codec.binary.Base64;
 
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
+import javax.crypto.Cipher;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
 
 /**
- * Controller for database sync, bulk events, and health checks
- * All payloads are encrypted with AES-256/CBC/PKCS5Padding
+ * Test client for encrypted endpoints
+ * Usage: Run this after starting the application
  */
-@RestController
-@RequestMapping("/controller")
-@Tag(name = "Controller Sync", description = "Database synchronization and offline event handling")
-public class ControllerSyncController {
+public class TestClient {
 
-    private static final Logger logger = LoggerFactory.getLogger(ControllerSyncController.class);
-    private static final String IV_HEADER = "X-IV";
+    private static final String BASE_URL = "http://localhost:8080";
+    private static final String ENCRYPTION_KEY = "0123456789abcdef0123456789abcdef"; // Must match application.properties
+    private static final String ALGORITHM = "AES/CBC/PKCS5Padding";
+    
+    private static final ObjectMapper objectMapper = new ObjectMapper();
+    private static final HttpClient httpClient = HttpClient.newHttpClient();
 
-    private final DbSyncService dbSyncService;
-    private final BulkEventService bulkEventService;
-    private final AesEncryptionUtil encryptionUtil;
+    public static void main(String[] args) throws Exception {
+        System.out.println("=== Access Control System Test Client ===\n");
 
-    public ControllerSyncController(DbSyncService dbSyncService,
-                                   BulkEventService bulkEventService,
-                                   AesEncryptionUtil encryptionUtil) {
-        this.dbSyncService = dbSyncService;
-        this.bulkEventService = bulkEventService;
-        this.encryptionUtil = encryptionUtil;
+        // Test 1: Ping
+        testPing();
+        
+        // Test 2: Validate Access
+        testValidateAccess();
+        
+        // Test 3: DB Sync
+        testDbSync();
+        
+        System.out.println("\n=== All Tests Completed ===");
     }
 
-    @PostMapping(value = "/db-sync",
-                 consumes = MediaType.APPLICATION_OCTET_STREAM_VALUE,
-                 produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
-    @Operation(
-        summary = "Database synchronization",
-        description = "Sync allowed cards for each reader. Returns minimal payload optimized for offline controllers. " +
-                     "Triggered periodically or on reconnect.",
-        parameters = {
-            @Parameter(name = "X-IV", description = "Base64-encoded IV for encryption/decryption", required = true)
-        },
-        requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
-            description = "Encrypted DbSyncRequest: {controllerMac}",
-            content = @Content(mediaType = "application/octet-stream")
-        ),
-        responses = {
-            @ApiResponse(responseCode = "200", description = "Sync data returned",
-                content = @Content(mediaType = "application/octet-stream",
-                    schema = @Schema(description = "Encrypted DbSyncResponse: {readers: [{readerUuid, allowedCards: [cardUid]}]}"))),
-            @ApiResponse(responseCode = "400", description = "Invalid request or encryption error")
-        }
-    )
-    public ResponseEntity<byte[]> dbSync(
-            @RequestHeader(IV_HEADER) String iv,
-            @RequestBody byte[] encryptedRequest) {
-
-        try {
-            // Validate IV
-            if (!encryptionUtil.isValidIV(iv)) {
-                throw new EncryptionException("Invalid or missing X-IV header");
-            }
-
-            // Decrypt request
-            DbSyncRequest request = encryptionUtil.decrypt(
-                    encryptedRequest, iv, DbSyncRequest.class);
-
-            logger.info("DB sync request - controller_mac: {}", request.getControllerMac());
-
-            // Process sync
-            DbSyncResponse response = dbSyncService.syncDatabase(request);
-
-            // Encrypt response with SAME IV
-            byte[] encryptedResponse = encryptionUtil.encrypt(response, iv);
-
-            logger.info("DB sync completed - controller_mac: {}, readers: {}, total_cards: {}",
-                    request.getControllerMac(),
-                    response.getReaders().size(),
-                    response.getReaders().stream()
-                            .mapToInt(r -> r.getAllowedCards().size()).sum());
-
-            return ResponseEntity.ok()
-                    .header(IV_HEADER, iv)
-                    .body(encryptedResponse);
-
-        } catch (EncryptionException e) {
-            logger.error("Encryption error: {}", e.getMessage());
-            throw e;
-        } catch (Exception e) {
-            logger.error("DB sync error: {}", e.getMessage(), e);
-            throw new RuntimeException("DB sync failed: " + e.getMessage(), e);
-        }
+    private static void testPing() throws Exception {
+        System.out.println("1. Testing Ping Endpoint...");
+        
+        String requestJson = "{\"controllerMac\":\"AA:BB:CC:DD:EE:FF\"}";
+        
+        String response = sendEncryptedRequest(
+            BASE_URL + "/controller/ping",
+            requestJson
+        );
+        
+        System.out.println("   Response: " + response);
+        System.out.println("   ✓ Ping successful\n");
     }
 
-    @PostMapping(value = "/bulk-event-logs",
-                 consumes = MediaType.APPLICATION_OCTET_STREAM_VALUE,
-                 produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
-    @Operation(
-        summary = "Upload bulk event logs",
-        description = "Upload events collected during offline mode. Events are processed chronologically. " +
-                     "Called after controller reconnects.",
-        parameters = {
-            @Parameter(name = "X-IV", description = "Base64-encoded IV for encryption/decryption", required = true)
-        },
-        requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
-            description = "Encrypted BulkEventLogsRequest: {controllerMac, events: [{readerUuid, cardUid, eventType, eventTime}]}",
-            content = @Content(mediaType = "application/octet-stream")
-        ),
-        responses = {
-            @ApiResponse(responseCode = "200", description = "Events received and processed",
-                content = @Content(mediaType = "application/octet-stream",
-                    schema = @Schema(description = "Encrypted BulkEventLogsResponse: {status, processedCount}"))),
-            @ApiResponse(responseCode = "400", description = "Invalid request or encryption error")
-        }
-    )
-    public ResponseEntity<byte[]> bulkEventLogs(
-            @RequestHeader(IV_HEADER) String iv,
-            @RequestBody byte[] encryptedRequest) {
-
-        try {
-            // Validate IV
-            if (!encryptionUtil.isValidIV(iv)) {
-                throw new EncryptionException("Invalid or missing X-IV header");
-            }
-
-            // Decrypt request
-            BulkEventLogsRequest request = encryptionUtil.decrypt(
-                    encryptedRequest, iv, BulkEventLogsRequest.class);
-
-            logger.info("Bulk event logs request - controller_mac: {}, event_count: {}",
-                    request.getControllerMac(),
-                    request.getEvents() != null ? request.getEvents().size() : 0);
-
-            // Process bulk events
-            BulkEventLogsResponse response = bulkEventService.processBulkEvents(request);
-
-            // Encrypt response with SAME IV
-            byte[] encryptedResponse = encryptionUtil.encrypt(response, iv);
-
-            return ResponseEntity.ok()
-                    .header(IV_HEADER, iv)
-                    .body(encryptedResponse);
-
-        } catch (EncryptionException e) {
-            logger.error("Encryption error: {}", e.getMessage());
-            throw e;
-        } catch (Exception e) {
-            logger.error("Bulk event logs error: {}", e.getMessage(), e);
-            throw new RuntimeException("Bulk event logs processing failed: " + e.getMessage(), e);
-        }
+    private static void testValidateAccess() throws Exception {
+        System.out.println("2. Testing Validate Access Endpoint...");
+        
+        String requestJson = "{"
+            + "\"controllerMac\":\"AA:BB:CC:DD:EE:FF\","
+            + "\"readerUuid\":\"reader-uuid-123\","
+            + "\"cardUid\":\"A1B2C3D4\","
+            + "\"timestamp\":\"2026-01-27T10:30:00\""
+            + "}";
+        
+        String response = sendEncryptedRequest(
+            BASE_URL + "/access/validate",
+            requestJson
+        );
+        
+        System.out.println("   Response: " + response);
+        System.out.println("   ✓ Access validation successful\n");
     }
 
-    @PostMapping(value = "/ping",
-                 consumes = MediaType.APPLICATION_OCTET_STREAM_VALUE,
-                 produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
-    @Operation(
-        summary = "Controller health check",
-        description = "Verify connectivity and get server time.",
-        parameters = {
-            @Parameter(name = "X-IV", description = "Base64-encoded IV for encryption/decryption", required = true)
-        },
-        requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
-            description = "Encrypted PingRequest: {controllerMac}",
-            content = @Content(mediaType = "application/octet-stream")
-        ),
-        responses = {
-            @ApiResponse(responseCode = "200", description = "Ping successful",
-                content = @Content(mediaType = "application/octet-stream",
-                    schema = @Schema(description = "Encrypted PingResponse: {status, serverTime}"))),
-            @ApiResponse(responseCode = "400", description = "Invalid request or encryption error")
+    private static void testDbSync() throws Exception {
+        System.out.println("3. Testing DB Sync Endpoint...");
+        
+        String requestJson = "{\"controllerMac\":\"AA:BB:CC:DD:EE:FF\"}";
+        
+        String response = sendEncryptedRequest(
+            BASE_URL + "/controller/db-sync",
+            requestJson
+        );
+        
+        System.out.println("   Response: " + response);
+        System.out.println("   ✓ DB Sync successful\n");
+    }
+
+    private static String sendEncryptedRequest(String url, String requestJson) throws Exception {
+        // Generate random IV
+        byte[] ivBytes = new byte[16];
+        new SecureRandom().nextBytes(ivBytes);
+        String ivBase64 = Base64.encodeBase64String(ivBytes);
+        
+        // Encrypt request
+        byte[] encryptedRequest = encrypt(requestJson, ivBytes);
+        
+        // Send HTTP request
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create(url))
+            .header("Content-Type", "application/octet-stream")
+            .header("X-IV", ivBase64)
+            .POST(HttpRequest.BodyPublishers.ofByteArray(encryptedRequest))
+            .build();
+        
+        HttpResponse<byte[]> response = httpClient.send(
+            request, 
+            HttpResponse.BodyHandlers.ofByteArray()
+        );
+        
+        if (response.statusCode() != 200) {
+            throw new RuntimeException("HTTP " + response.statusCode());
         }
-    )
-    public ResponseEntity<byte[]> ping(
-            @RequestHeader(IV_HEADER) String iv,
-            @RequestBody byte[] encryptedRequest) {
+        
+        // Decrypt response (uses same IV)
+        byte[] encryptedResponse = response.body();
+        String decryptedResponse = decrypt(encryptedResponse, ivBytes);
+        
+        return decryptedResponse;
+    }
 
-        try {
-            // Validate IV
-            if (!encryptionUtil.isValidIV(iv)) {
-                throw new EncryptionException("Invalid or missing X-IV header");
-            }
+    private static byte[] encrypt(String data, byte[] ivBytes) throws Exception {
+        SecretKeySpec keySpec = new SecretKeySpec(
+            ENCRYPTION_KEY.getBytes(StandardCharsets.UTF_8), 
+            "AES"
+        );
+        IvParameterSpec ivSpec = new IvParameterSpec(ivBytes);
+        
+        Cipher cipher = Cipher.getInstance(ALGORITHM);
+        cipher.init(Cipher.ENCRYPT_MODE, keySpec, ivSpec);
+        
+        return cipher.doFinal(data.getBytes(StandardCharsets.UTF_8));
+    }
 
-            // Decrypt request
-            PingRequest request = encryptionUtil.decrypt(
-                    encryptedRequest, iv, PingRequest.class);
-
-            logger.debug("Ping request - controller_mac: {}", request.getControllerMac());
-
-            // Create response
-            PingResponse response = new PingResponse(
-                    "OK",
-                    LocalDateTime.now().format(DateTimeFormatter.ISO_DATE_TIME)
-            );
-
-            // Encrypt response with SAME IV
-            byte[] encryptedResponse = encryptionUtil.encrypt(response, iv);
-
-            return ResponseEntity.ok()
-                    .header(IV_HEADER, iv)
-                    .body(encryptedResponse);
-
-        } catch (EncryptionException e) {
-            logger.error("Encryption error: {}", e.getMessage());
-            throw e;
-        } catch (Exception e) {
-            logger.error("Ping error: {}", e.getMessage(), e);
-            throw new RuntimeException("Ping failed: " + e.getMessage(), e);
-        }
+    private static String decrypt(byte[] encryptedData, byte[] ivBytes) throws Exception {
+        SecretKeySpec keySpec = new SecretKeySpec(
+            ENCRYPTION_KEY.getBytes(StandardCharsets.UTF_8), 
+            "AES"
+        );
+        IvParameterSpec ivSpec = new IvParameterSpec(ivBytes);
+        
+        Cipher cipher = Cipher.getInstance(ALGORITHM);
+        cipher.init(Cipher.DECRYPT_MODE, keySpec, ivSpec);
+        
+        byte[] decrypted = cipher.doFinal(encryptedData);
+        return new String(decrypted, StandardCharsets.UTF_8);
     }
 }
